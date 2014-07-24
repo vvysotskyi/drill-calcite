@@ -73,7 +73,12 @@ public class OrderByScope extends DelegatingScope {
       final SqlValidatorNamespace selectNs =
           validator.getNamespace(select);
       final RelDataType rowType = selectNs.getRowType();
-      if (validator.catalogReader.field(rowType, name) != null) {
+      final RelDataTypeField field =
+          validator.catalogReader.field(rowType, name);
+
+      // If rowType has "*" column, above method call could return field
+      // as "*". Use super.fullyQualify() for such case.
+      if (field != null && ! field.getName().startsWith("*")) {
         return SqlQualified.create(this, 1, selectNs, identifier);
       }
     }

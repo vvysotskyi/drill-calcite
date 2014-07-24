@@ -158,9 +158,24 @@ public abstract class DelegatingScope implements SqlValidatorScope {
 
       // todo: do implicit collation here
       final SqlParserPos pos = identifier.getParserPosition();
+
+      RelDataType fromRowType = namespace.getRowType();
+      RelDataTypeField field =
+          validator.catalogReader.field(fromRowType, columnName);
+      if (field != null
+          && field.getName().startsWith("*")
+          && !columnName.startsWith("*")) {
+          // Make sure fromRowType only contains one star column.
+          // Having more than one star columns implies ambiguous column.
+        if (getStarColumnCount(fromRowType) > 1) {
+          throw validator.newValidationError(identifier,
+              RESOURCE.columnAmbiguous(columnName));
+        }
+      }
+
       SqlIdentifier expanded =
           new SqlIdentifier(
-              ImmutableList.of(tableName, columnName),
+              ImmutableList.of(tableName, field.getName()),
               null,
               pos,
               ImmutableList.of(SqlParserPos.ZERO, pos));
@@ -183,16 +198,24 @@ public abstract class DelegatingScope implements SqlValidatorScope {
         throw validator.newValidationError(prefix1,
             RESOURCE.tableNameNotFound(prefix1.toString()));
       }
-      RelDataType fromRowType = fromNs.getRowType();
+      fromRowType = fromNs.getRowType();
       for (int j = i; j < size; j++) {
         final SqlIdentifier last = identifier.getComponent(j);
         columnName = last.getSimple();
-        final RelDataTypeField field =
+        field =
             validator.catalogReader.field(fromRowType, columnName);
         if (field == null) {
           throw validator.newValidationError(last,
               RESOURCE.columnNotFoundInTable(columnName,
                   identifier.getComponent(0, j).toString()));
+        }
+        if (field.getName().startsWith("*") && !columnName.startsWith("*")) {
+          // Make sure fromRowType only contains one star column.
+          // Having more than one star columns implies ambiguous column.
+          if (getStarColumnCount(fromRowType) > 1) {
+            throw validator.newValidationError(identifier,
+                RESOURCE.columnAmbiguous(columnName));
+          }
         }
         // normalize case to match definition, in a copy of the identifier
         identifier = identifier.setName(j, field.getName());
@@ -225,6 +248,18 @@ public abstract class DelegatingScope implements SqlValidatorScope {
   public SqlValidatorScope getParent() {
     return parent;
   }
+
+  private int getStarColumnCount(RelDataType rowType) {
+    int count = 0;
+    for (String fieldName : rowType.getFieldNames()) {
+      if (fieldName.startsWith("*")) {
+        count++;
+      }
+    }
+
+    return count;
+  }
+
 }
 
 // End DelegatingScope.java

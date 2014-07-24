@@ -107,6 +107,13 @@ public abstract class RelDataTypeImpl
             fieldName, -1, lastField.getType());
       }
     }
+    // star field in schema-less query
+    for (RelDataTypeField field : fieldList) {
+      if (field.getName().startsWith("*")) {
+        return field;
+      }
+    }
+
     return null;
   }
 

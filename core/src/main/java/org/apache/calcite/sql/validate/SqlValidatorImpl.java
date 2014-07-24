@@ -450,17 +450,33 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
     switch (identifier.names.size()) {
     case 1:
       for (Pair<String, SqlValidatorNamespace> p : scope.children) {
-        final SqlNode from = p.right.getNode();
-        final SqlValidatorNamespace fromNs = getNamespace(from, scope);
-        assert fromNs != null;
-        final RelDataType rowType = fromNs.getRowType();
-        for (RelDataTypeField field : rowType.getFieldList()) {
-          String columnName = field.getName();
+        // Schema Table: Expand the list of columns.
+        if (p.right.getRowType() instanceof RelRecordType) {
+          final SqlNode from = p.right.getNode();
+          final SqlValidatorNamespace fromNs = getNamespace(from, scope);
+          assert fromNs != null;
+          final RelDataType rowType = fromNs.getRowType();
+          for (RelDataTypeField field : rowType.getFieldList()) {
+            String columnName = field.getName();
 
-          // TODO: do real implicit collation here
+            // TODO: do real implicit collation here
+            final SqlNode exp =
+                new SqlIdentifier(
+                    ImmutableList.of(p.left, columnName),
+                    starPosition);
+            addToSelectList(
+                selectItems,
+                aliases,
+                types,
+                exp,
+                scope,
+                includeSystemVars);
+          }
+        } else {
+          // Do not expand, if it's Drill Schemaless Table.
           final SqlNode exp =
               new SqlIdentifier(
-                  ImmutableList.of(p.left, columnName),
+                  ImmutableList.of(p.left, "*"),
                   starPosition);
           addToSelectList(
               selectItems,
@@ -495,15 +511,26 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
       }
       assert fromNs != null;
       final RelDataType rowType = fromNs.getRowType();
-      for (RelDataTypeField field : rowType.getFieldList()) {
-        String columnName = field.getName();
+      if (rowType instanceof RelRecordType) {
+        for (RelDataTypeField field : rowType.getFieldList()) {
+          String columnName = field.getName();
 
-        // TODO: do real implicit collation here
+          // TODO: do real implicit collation here
+          addToSelectList(
+              selectItems,
+              aliases,
+              types,
+              prefixId.plus(columnName, starPosition),
+              scope,
+              includeSystemVars);
+        }
+      } else {
+        // Do not expand, if it's Drill Schemaless Table.
         addToSelectList(
             selectItems,
             aliases,
             types,
-            prefixId.plus(columnName, starPosition),
+            prefixId.plus("*", starPosition),
             scope,
             includeSystemVars);
       }
@@ -2771,6 +2798,11 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
       break;
     case ON:
       Util.permAssert(condition != null, "condition != null");
+      if (condition != null) {
+        SqlNode expandedCondition = expand(condition, joinScope);
+        join.setOperand(5, expandedCondition);
+        condition = join.getCondition();
+      }
       validateWhereOrOn(joinScope, condition, "ON");
       break;
     case USING:
@@ -3191,7 +3223,19 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
     final SqlValidatorScope orderScope = getOrderScope(select);
 
     Util.permAssert(orderScope != null, "orderScope != null");
+    List<SqlNode> expandList = Lists.newArrayList();
+
     for (SqlNode orderItem : orderList) {
+      SqlNode expandedOrderItem = expand(orderItem, orderScope);
+      expandList.add(expandedOrderItem);
+    }
+
+    SqlNodeList expandedOrderList = new SqlNodeList(
+        expandList,
+        orderList.getParserPosition());
+    select.setOrderBy(expandedOrderList);
+
+    for (SqlNode orderItem : expandedOrderList) {
       validateOrderItem(select, orderItem);
     }
   }
@@ -3227,6 +3271,14 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
     validateNoAggs(groupList, "GROUP BY");
     final SqlValidatorScope groupScope = getGroupScope(select);
     inferUnknownTypes(unknownType, groupScope, groupList);
+
+    List<SqlNode> expandedList = Lists.newArrayList();
+    for (SqlNode groupItem : groupList) {
+      SqlNode expandedItem = expand(groupItem, groupScope);
+      expandedList.add(expandedItem);
+    }
+    groupList = new SqlNodeList(expandedList, groupList.getParserPosition());
+    select.setGroupBy(groupList);
 
     groupList.validate(this, groupScope);
 
@@ -3284,6 +3336,8 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
       return;
     }
     final SqlValidatorScope whereScope = getWhereScope(select);
+    final SqlNode expandedWhere = expand(where, whereScope);
+    select.setWhere(expandedWhere);
     validateWhereOrOn(whereScope, where, "WHERE");
   }
 
@@ -4305,8 +4359,24 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
         return call.accept(this);
       }
       final SqlIdentifier fqId = getScope().fullyQualify(id).identifier;
-      validator.setOriginal(fqId, id);
-      return fqId;
+      SqlNode expandedExpr = fqId;
+      // Convert a column ref into ITEM(*, 'col_name').
+      if (Util.last(fqId.names).equals("*")
+          && !Util.last(id.names).equals("*")) {
+        SqlNode[] inputs = new SqlNode[2];
+        inputs[0] = fqId;
+        inputs[1] = SqlLiteral.createCharString(
+            Util.last(id.names),
+            id.getParserPosition());
+        SqlBasicCall item_call = new SqlBasicCall(
+            SqlStdOperatorTable.ITEM,
+            inputs,
+            id.getParserPosition());
+        expandedExpr = item_call;
+      }
+
+      validator.setOriginal(expandedExpr, id);
+      return expandedExpr;
     }
 
     @Override protected SqlNode visitScoped(SqlCall call) {
@@ -4314,6 +4384,7 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
       case SCALAR_QUERY:
       case CURRENT_VALUE:
       case NEXT_VALUE:
+      case WITH:
         return call;
       }
       // Only visits arguments which are expressions. We don't want to
