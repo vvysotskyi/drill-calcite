@@ -227,6 +227,11 @@ public class SqlTypeFactoryImpl extends RelDataTypeFactoryImpl {
         return null;
       }
 
+      // If one type is "ANY", return "ANY" as leastrestrictiveSqlType.
+      if (typeName == SqlTypeName.ANY) {
+        return createTypeWithNullability(type, true);
+      }
+
       if (type.isNullable()) {
         anyNullable = true;
       }
