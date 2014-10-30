@@ -47,7 +47,7 @@ public class ProjectFilterTransposeRule extends RelOptRule {
    * @param preserveExprCondition Condition for expressions that should be
    *                              preserved in the projection
    */
-  private ProjectFilterTransposeRule(
+  protected ProjectFilterTransposeRule(
       PushProjector.ExprCondition preserveExprCondition) {
     super(
         operand(
