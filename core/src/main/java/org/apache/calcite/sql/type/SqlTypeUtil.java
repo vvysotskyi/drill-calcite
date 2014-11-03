@@ -663,7 +663,7 @@ public abstract class SqlTypeUtil {
     }
   }
 
-  private static boolean isAny(RelDataType t) {
+  public static boolean isAny(RelDataType t) {
     return t.getFamily() == SqlTypeFamily.ANY;
   }
 
