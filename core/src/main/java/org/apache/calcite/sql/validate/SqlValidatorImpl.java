@@ -319,6 +319,12 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
       SqlNodeList selectList,
       SqlSelect select,
       boolean includeSystemVars) {
+    // If the select list has been expanded in previous call,
+    // skip another round of expanding.
+    if (select.isSelectListExpanded()) {
+      return selectList;
+    }
+
     List<SqlNode> list = new ArrayList<SqlNode>();
     List<Map.Entry<String, RelDataType>> types =
         new ArrayList<Map.Entry<String, RelDataType>>();
@@ -3431,7 +3437,9 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
             selectItems.getParserPosition());
     if (shouldExpandIdentifiers()) {
       select.setSelectList(newSelectList);
+      select.setSelectListExpanded(true);
     }
+
     getRawSelectScope(select).setExpandedSelectList(expandedSelectItems);
 
     // TODO: when SELECT appears as a value subquery, should be using

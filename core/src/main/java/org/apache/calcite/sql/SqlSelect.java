@@ -47,6 +47,9 @@ public class SqlSelect extends SqlCall {
   SqlNode offset;
   SqlNode fetch;
 
+  //whether select list has been expanded or not
+  private boolean selectListExpanded = false;
+
   //~ Constructors -----------------------------------------------------------
 
   public SqlSelect(SqlParserPos pos,
@@ -233,6 +236,15 @@ public class SqlSelect extends SqlCall {
   public boolean isKeywordPresent(SqlSelectKeyword targetKeyWord) {
     return getModifierNode(targetKeyWord) != null;
   }
+
+  public void setSelectListExpanded(boolean selectListExpanded) {
+    this.selectListExpanded = selectListExpanded;
+  }
+
+  public boolean isSelectListExpanded() {
+    return this.selectListExpanded;
+  }
+
 }
 
 // End SqlSelect.java
