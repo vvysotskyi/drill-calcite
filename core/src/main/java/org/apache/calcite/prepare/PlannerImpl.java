@@ -179,7 +179,7 @@ public class PlannerImpl implements Planner {
   public SqlNode validate(SqlNode sqlNode) throws ValidationException {
     ensure(State.STATE_3_PARSED);
     final SqlConformance conformance = conformance();
-    final CalciteCatalogReader catalogReader = createCatalogReader();
+    final CalciteCatalogReader catalogReader = createCatalogReader(rootSchema(defaultSchema));
     this.validator =
         new CalciteSqlValidator(operatorTable, catalogReader, typeFactory,
             conformance);
@@ -230,7 +230,7 @@ public class PlannerImpl implements Planner {
         .build();
     final SqlToRelConverter sqlToRelConverter =
         new SqlToRelConverter(new ViewExpanderImpl(), validator,
-            createCatalogReader(), cluster, convertletTable, config);
+            createCatalogReader(rootSchema(defaultSchema)), cluster, convertletTable, config);
     root =
         sqlToRelConverter.convertQuery(validatedSqlNode, false, true);
     root = root.withRel(sqlToRelConverter.flattenTypes(root.rel, true));
@@ -247,6 +247,19 @@ public class PlannerImpl implements Planner {
   public class ViewExpanderImpl implements ViewExpander {
     @Override public RelRoot expandView(RelDataType rowType, String queryString,
       List<String> schemaPath, List<String> viewPath) {
+      final CalciteCatalogReader catalogReader =
+          createCatalogReader(rootSchema(defaultSchema)).withSchemaPath(schemaPath);
+      return expandViewHelper(queryString, catalogReader);
+    }
+
+    @Override public RelRoot expandView(RelDataType rowType, String queryString,
+      SchemaPlus rootSchema, List<String> schemaPath) {
+      CalciteCatalogReader catalogReader =
+          createCatalogReader(rootSchema).withSchemaPath(schemaPath);
+      return expandViewHelper(queryString, catalogReader);
+    }
+
+    private RelRoot expandViewHelper(String queryString, CalciteCatalogReader catalogReader) {
       SqlParser parser = SqlParser.create(queryString, parserConfig);
       SqlNode sqlNode;
       try {
@@ -256,8 +269,6 @@ public class PlannerImpl implements Planner {
       }
 
       final SqlConformance conformance = conformance();
-      final CalciteCatalogReader catalogReader =
-          createCatalogReader().withSchemaPath(schemaPath);
       final SqlValidator validator =
           new CalciteSqlValidator(operatorTable, catalogReader, typeFactory,
               conformance);
@@ -288,8 +299,7 @@ public class PlannerImpl implements Planner {
   }
 
   // CalciteCatalogReader is stateless; no need to store one
-  private CalciteCatalogReader createCatalogReader() {
-    final SchemaPlus rootSchema = rootSchema(defaultSchema);
+  private CalciteCatalogReader createCatalogReader(SchemaPlus rootSchema) {
     final Context context = config.getContext();
     final CalciteConnectionConfig connectionConfig;
 
