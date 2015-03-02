@@ -35,6 +35,7 @@ import org.apache.calcite.rex.RexExecutorImpl;
 import org.apache.calcite.runtime.Bindable;
 import org.apache.calcite.runtime.Hook;
 import org.apache.calcite.runtime.Typed;
+import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.schema.impl.StarTable;
 import org.apache.calcite.sql.SqlExplain;
 import org.apache.calcite.sql.SqlExplainLevel;
@@ -366,6 +367,25 @@ public abstract class Prepare {
   public RelNode expandView(
       RelDataType rowType,
       String queryString,
+      List<String> schemaPath) {
+    throw new UnsupportedOperationException();
+  }
+
+
+  /**
+   * Returns a relational expression which is to be substituted for an access
+   * to a SQL view.
+   *
+   * @param rowType Row type of the view
+   * @param queryString Body of the view
+   * @param rootSchema Root schema of the schema tree
+   * @param schemaPath List of schema names wherein to find referenced tables
+   * @return Relational expression
+   */
+  public RelNode expandView(
+      RelDataType rowType,
+      String queryString,
+      SchemaPlus rootSchema,
       List<String> schemaPath) {
     throw new UnsupportedOperationException();
   }

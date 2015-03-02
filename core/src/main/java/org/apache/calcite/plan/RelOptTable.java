@@ -23,6 +23,7 @@ import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.metadata.RelMetadataQuery;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeField;
+import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.util.ImmutableBitSet;
 
 import java.util.List;
@@ -115,6 +116,12 @@ public interface RelOptTable {
     RelNode expandView(
         RelDataType rowType,
         String queryString,
+        List<String> schemaPath);
+
+    RelNode expandView(
+        RelDataType rowType,
+        String queryString,
+        SchemaPlus rootSchema,
         List<String> schemaPath);
   }
 

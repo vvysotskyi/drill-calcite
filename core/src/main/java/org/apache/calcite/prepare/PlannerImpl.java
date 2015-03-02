@@ -211,8 +211,29 @@ public class PlannerImpl implements Planner {
   /** Implements {@link org.apache.calcite.plan.RelOptTable.ViewExpander}
    * interface for {@link org.apache.calcite.tools.Planner}. */
   public class ViewExpanderImpl implements ViewExpander {
+    @Override
     public RelNode expandView(RelDataType rowType, String queryString,
         List<String> schemaPath) {
+      final CalciteCatalogReader catalogReader =
+          createCatalogReader().withSchemaPath(schemaPath);
+      return expandViewHelper(queryString, catalogReader);
+    }
+
+    @Override
+    public RelNode expandView(RelDataType rowType, String queryString,
+                              SchemaPlus rootSchema, List<String> schemaPath) {
+      // View may have different schema path than current connection.
+      final CalciteCatalogReader catalogReader = new CalciteCatalogReader(
+          CalciteSchema.from(rootSchema),
+          parserConfig.caseSensitive(),
+          CalciteSchema.from(defaultSchema).path(null),
+          typeFactory).withSchemaPath(schemaPath);
+      return expandViewHelper(queryString, catalogReader);
+    }
+
+    private RelNode expandViewHelper(
+        String queryString,
+        CalciteCatalogReader catalogReader) {
       SqlParser parser = SqlParser.create(queryString, parserConfig);
       SqlNode sqlNode;
       try {
@@ -221,8 +242,6 @@ public class PlannerImpl implements Planner {
         throw new RuntimeException("parse failed", e);
       }
 
-      final CalciteCatalogReader catalogReader =
-          createCatalogReader().withSchemaPath(schemaPath);
       final SqlValidator validator = new CalciteSqlValidator(operatorTable,
           catalogReader, typeFactory);
       validator.setIdentifierExpansion(true);
@@ -244,6 +263,8 @@ public class PlannerImpl implements Planner {
 
       return rel;
     }
+
+
   }
 
   // CalciteCatalogReader is stateless; no need to store one

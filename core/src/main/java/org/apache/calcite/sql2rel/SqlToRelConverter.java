@@ -75,6 +75,7 @@ import org.apache.calcite.rex.RexVisitorImpl;
 import org.apache.calcite.rex.RexWindowBound;
 import org.apache.calcite.schema.ModifiableTable;
 import org.apache.calcite.schema.ModifiableView;
+import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.schema.Table;
 import org.apache.calcite.schema.TranslatableTable;
 import org.apache.calcite.sql.JoinConditionType;
@@ -2924,11 +2925,22 @@ public class SqlToRelConverter {
         return cluster;
       }
 
+      @Override
       public RelNode expandView(
           RelDataType rowType,
           String queryString,
           List<String> schemaPath) {
         return viewExpander.expandView(rowType, queryString, schemaPath);
+      }
+
+      @Override
+      public RelNode expandView(
+          RelDataType rowType,
+          String queryString,
+          SchemaPlus rootSchema,
+          List<String> schemaPath) {
+        return viewExpander.expandView(rowType, queryString, rootSchema,
+            schemaPath);
       }
     };
   }
