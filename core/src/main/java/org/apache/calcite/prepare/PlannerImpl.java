@@ -65,6 +65,7 @@ import com.google.common.collect.ImmutableList;
 import java.io.Reader;
 import java.util.List;
 import java.util.Properties;
+import java.util.function.Supplier;
 
 /** Implementation of {@link org.apache.calcite.tools.Planner}. */
 public class PlannerImpl implements Planner, ViewExpander {
@@ -212,7 +213,7 @@ public class PlannerImpl implements Planner, ViewExpander {
   public SqlNode validate(SqlNode sqlNode) throws ValidationException {
     ensure(State.STATE_3_PARSED);
     final SqlConformance conformance = conformance();
-    final CalciteCatalogReader catalogReader = createCatalogReader();
+    final CalciteCatalogReader catalogReader = createCatalogReader(rootSchema(defaultSchema));
     this.validator =
         new CalciteSqlValidator(operatorTable, catalogReader, typeFactory,
             conformance);
@@ -255,7 +256,7 @@ public class PlannerImpl implements Planner, ViewExpander {
         .build();
     final SqlToRelConverter sqlToRelConverter =
         new SqlToRelConverter(this, validator,
-            createCatalogReader(), cluster, convertletTable, config);
+            createCatalogReader(rootSchema(defaultSchema)), cluster, convertletTable, config);
     root =
         sqlToRelConverter.convertQuery(validatedSqlNode, false, true);
     root = root.withRel(sqlToRelConverter.flattenTypes(root.rel, true));
@@ -279,10 +280,27 @@ public class PlannerImpl implements Planner, ViewExpander {
       return PlannerImpl.this.expandView(rowType, queryString, schemaPath,
           viewPath);
     }
+
+    public RelRoot expandView(RelDataType rowType, String queryString,
+                              SchemaPlus rootSchema, List<String> schemaPath) {
+      return PlannerImpl.this.expandView(rowType, queryString, rootSchema, schemaPath);
+    }
   }
 
   @Override public RelRoot expandView(RelDataType rowType, String queryString,
-      List<String> schemaPath, List<String> viewPath) {
+                                      List<String> schemaPath, List<String> viewPath) {
+    return expandView(queryString,
+        () -> createCatalogReader(rootSchema(defaultSchema)).withSchemaPath(schemaPath));
+  }
+
+  @Override public RelRoot expandView(RelDataType rowType, String queryString,
+                                      SchemaPlus rootSchema, List<String> schemaPath) {
+    return expandView(queryString,
+        () -> createCatalogReader(rootSchema).withSchemaPath(schemaPath));
+  }
+
+  private RelRoot expandView(String queryString,
+                             Supplier<CalciteCatalogReader> catalogReaderFactory) {
     if (planner == null) {
       ready();
     }
@@ -295,8 +313,7 @@ public class PlannerImpl implements Planner, ViewExpander {
     }
 
     final SqlConformance conformance = conformance();
-    final CalciteCatalogReader catalogReader =
-        createCatalogReader().withSchemaPath(schemaPath);
+    final CalciteCatalogReader catalogReader = catalogReaderFactory.get();
     final SqlValidator validator =
         new CalciteSqlValidator(operatorTable, catalogReader, typeFactory,
             conformance);
@@ -325,9 +342,7 @@ public class PlannerImpl implements Planner, ViewExpander {
   }
 
   // CalciteCatalogReader is stateless; no need to store one
-  private CalciteCatalogReader createCatalogReader() {
-    final SchemaPlus rootSchema = rootSchema(defaultSchema);
-
+  private CalciteCatalogReader createCatalogReader(SchemaPlus rootSchema) {
     return new CalciteCatalogReader(
         CalciteSchema.from(rootSchema),
         CalciteSchema.from(defaultSchema).path(null),
