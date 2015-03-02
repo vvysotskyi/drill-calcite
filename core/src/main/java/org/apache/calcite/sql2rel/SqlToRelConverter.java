@@ -88,6 +88,7 @@ import org.apache.calcite.rex.RexWindowBound;
 import org.apache.calcite.schema.ColumnStrategy;
 import org.apache.calcite.schema.ModifiableTable;
 import org.apache.calcite.schema.ModifiableView;
+import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.schema.Table;
 import org.apache.calcite.schema.TranslatableTable;
 import org.apache.calcite.schema.Wrapper;
@@ -3214,6 +3215,10 @@ public class SqlToRelConverter {
         return viewExpander.expandView(rowType, queryString, schemaPath, viewPath);
       }
 
+      @Override public RelRoot expandView(RelDataType rowType, String queryString,
+          SchemaPlus rootSchema, List<String> schemaPath) {
+        return viewExpander.expandView(rowType, queryString, rootSchema, schemaPath);
+      }
     };
   }
 
