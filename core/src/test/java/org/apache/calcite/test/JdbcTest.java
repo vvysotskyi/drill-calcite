@@ -32,6 +32,7 @@ import org.apache.calcite.config.Lex;
 import org.apache.calcite.jdbc.CalciteConnection;
 import org.apache.calcite.jdbc.CalciteMetaImpl;
 import org.apache.calcite.jdbc.CalciteSchema;
+import org.apache.calcite.jdbc.CalciteSchemaImpl;
 import org.apache.calcite.jdbc.Driver;
 import org.apache.calcite.linq4j.BaseQueryable;
 import org.apache.calcite.linq4j.Enumerable;
@@ -6278,7 +6279,7 @@ public class JdbcTest {
     a2Schema.add("tabLe1", table);
     a2Schema.add("tabLe2", table);
     assertThat(a2Schema.getTableNames().size(), equalTo(4));
-    final CalciteSchema a2CalciteSchema = CalciteSchema.from(a2Schema);
+    final CalciteSchema a2CalciteSchema = CalciteSchemaImpl.from(a2Schema);
     assertThat(a2CalciteSchema.getTable("table1", true), notNullValue());
     assertThat(a2CalciteSchema.getTable("table1", false), notNullValue());
     assertThat(a2CalciteSchema.getTable("taBle1", true), nullValue());

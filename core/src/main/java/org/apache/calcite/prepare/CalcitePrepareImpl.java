@@ -34,6 +34,7 @@ import org.apache.calcite.interpreter.Bindables;
 import org.apache.calcite.interpreter.Interpreters;
 import org.apache.calcite.jdbc.CalcitePrepare;
 import org.apache.calcite.jdbc.CalciteSchema;
+import org.apache.calcite.jdbc.CalciteSchemaImpl;
 import org.apache.calcite.linq4j.Enumerable;
 import org.apache.calcite.linq4j.Linq4j;
 import org.apache.calcite.linq4j.Ord;
@@ -866,7 +867,7 @@ public class CalcitePrepareImpl implements CalcitePrepare {
     final JavaTypeFactory typeFactory = prepareContext.getTypeFactory();
     final CalciteSchema schema =
         action.getConfig().getDefaultSchema() != null
-            ? CalciteSchema.from(action.getConfig().getDefaultSchema())
+            ? CalciteSchemaImpl.from(action.getConfig().getDefaultSchema())
             : prepareContext.getRootSchema();
     CalciteCatalogReader catalogReader =
         new CalciteCatalogReader(schema.root(),

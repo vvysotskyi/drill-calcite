@@ -113,8 +113,8 @@ abstract class CalciteConnectionImpl
           cfg.typeSystem(RelDataTypeSystem.class, RelDataTypeSystem.DEFAULT);
       this.typeFactory = new JavaTypeFactoryImpl(typeSystem);
     }
-    this.rootSchema =
-        rootSchema != null ? rootSchema : CalciteSchema.createRootSchema(true);
+    this.rootSchema = rootSchema != null
+        ? rootSchema : CalciteSchemaImpl.createRootSchema(true);
 
     this.properties.put(InternalProperty.CASE_SENSITIVE, cfg.caseSensitive());
     this.properties.put(InternalProperty.UNQUOTED_CASING, cfg.unquotedCasing());

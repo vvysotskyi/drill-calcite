@@ -504,7 +504,7 @@ public final class Schemas {
   public static Path path(CalciteSchema rootSchema, Iterable<String> names) {
     final ImmutableList.Builder<Pair<String, Schema>> builder =
         ImmutableList.builder();
-    Schema schema = rootSchema.schema;
+    Schema schema = rootSchema.getSchema();
     final Iterator<String> iterator = names.iterator();
     if (!iterator.hasNext()) {
       return PathImpl.EMPTY;

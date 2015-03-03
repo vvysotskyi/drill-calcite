@@ -17,6 +17,7 @@
 package org.apache.calcite.prepare;
 
 import org.apache.calcite.jdbc.CalciteSchema;
+import org.apache.calcite.jdbc.CalciteSchemaImpl;
 import org.apache.calcite.linq4j.Enumerable;
 import org.apache.calcite.linq4j.Grouping;
 import org.apache.calcite.linq4j.OrderedQueryable;
@@ -93,7 +94,7 @@ class QueryableRelBuilder<T> implements QueryableFactory<T> {
           (AbstractTableQueryable) queryable;
       final QueryableTable table = tableQueryable.table;
       final CalciteSchema.TableEntry tableEntry =
-          CalciteSchema.from(tableQueryable.schema)
+          CalciteSchemaImpl.from(tableQueryable.schema)
               .add(tableQueryable.tableName, tableQueryable.table);
       final RelOptTableImpl relOptTable =
           RelOptTableImpl.create(null, table.getRowType(translator.typeFactory),

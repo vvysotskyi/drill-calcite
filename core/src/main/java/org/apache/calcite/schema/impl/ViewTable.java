@@ -20,6 +20,7 @@ import org.apache.calcite.adapter.java.AbstractQueryableTable;
 import org.apache.calcite.adapter.java.JavaTypeFactory;
 import org.apache.calcite.jdbc.CalcitePrepare;
 import org.apache.calcite.jdbc.CalciteSchema;
+import org.apache.calcite.jdbc.CalciteSchemaImpl;
 import org.apache.calcite.linq4j.QueryProvider;
 import org.apache.calcite.linq4j.Queryable;
 import org.apache.calcite.plan.RelOptTable;
@@ -85,7 +86,7 @@ public class ViewTable
    */
   public static ViewTableMacro viewMacro(SchemaPlus schema, String viewSql,
       List<String> schemaPath, Boolean modifiable) {
-    return new ViewTableMacro(CalciteSchema.from(schema), viewSql, schemaPath,
+    return new ViewTableMacro(CalciteSchemaImpl.from(schema), viewSql, schemaPath,
         modifiable);
   }
 

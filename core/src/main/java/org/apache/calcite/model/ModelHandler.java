@@ -19,6 +19,7 @@ package org.apache.calcite.model;
 import org.apache.calcite.adapter.jdbc.JdbcSchema;
 import org.apache.calcite.jdbc.CalciteConnection;
 import org.apache.calcite.jdbc.CalciteSchema;
+import org.apache.calcite.jdbc.CalciteSchemaImpl;
 import org.apache.calcite.materialize.Lattice;
 import org.apache.calcite.schema.AggregateFunction;
 import org.apache.calcite.schema.ScalarFunction;
@@ -264,7 +265,7 @@ public class ModelHandler {
                 + currentSchemaName()
                 + "' is not a SemiMutableSchema");
       }
-      CalciteSchema calciteSchema = CalciteSchema.from(schema);
+      CalciteSchema calciteSchema = CalciteSchemaImpl.from(schema);
 
       final String viewName;
       final boolean existing;
@@ -295,7 +296,7 @@ public class ModelHandler {
             + currentSchemaName()
             + "' is not a SemiMutableSchema");
       }
-      CalciteSchema calciteSchema = CalciteSchema.from(schema);
+      CalciteSchema calciteSchema = CalciteSchemaImpl.from(schema);
       Lattice.Builder latticeBuilder =
           Lattice.builder(calciteSchema, jsonLattice.getSql())
               .auto(jsonLattice.auto)

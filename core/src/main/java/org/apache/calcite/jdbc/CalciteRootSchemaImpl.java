@@ -14,13 +14,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.calcite.jdbc;
 
+import org.apache.calcite.schema.Schema;
 
 /**
- * Interface that marks the root schema.
+ * Created by jni on 3/3/15.
  */
-public interface CalciteRootSchema extends CalciteSchema {
-}
+public class CalciteRootSchemaImpl extends CalciteSchemaImpl
+  implements CalciteRootSchema {
+  /** Creates a root schema. */
+  CalciteRootSchemaImpl(Schema schema) {
+    super(null, schema, "");
+  }
 
-// End CalciteRootSchema.java
+}
