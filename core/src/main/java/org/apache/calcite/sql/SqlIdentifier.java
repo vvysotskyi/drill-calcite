@@ -195,8 +195,11 @@ public class SqlIdentifier extends SqlNode {
     final ImmutableList<String> names =
         ImmutableList.<String>builder().addAll(this.names).add(name).build();
     final ImmutableList.Builder<SqlParserPos> builder = ImmutableList.builder();
+    if (this.componentPositions != null) {
+      builder.addAll(this.componentPositions);
+    }
     final ImmutableList<SqlParserPos> componentPositions =
-        builder.addAll(this.componentPositions).add(pos).build();
+        builder.add(pos).build();
     final SqlParserPos pos2 =
         SqlParserPos.sum(builder.add(this.pos).build());
     return new SqlIdentifier(names, collation, pos2, componentPositions);
@@ -296,6 +299,11 @@ public class SqlIdentifier extends SqlNode {
   }
 
   public SqlMonotonicity getMonotonicity(SqlValidatorScope scope) {
+    // for "star" column, return not_monotonic directly.
+    if (Util.last(names).startsWith("*")) {
+      return SqlMonotonicity.NOT_MONOTONIC;
+    }
+
     // First check for builtin functions which don't have parentheses,
     // like "LOCALTIME".
     final SqlValidator validator = scope.getValidator();
