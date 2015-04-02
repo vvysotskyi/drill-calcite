@@ -142,7 +142,8 @@ public abstract class SqlCall extends SqlNode {
 
     // Compare operators by name, not identity, because they may not
     // have been resolved yet.
-    if (!this.getOperator().getName().equals(that.getOperator().getName())) {
+    if (!this.getOperator().getName()
+        .equalsIgnoreCase(that.getOperator().getName())) {
       assert !fail : this + "!=" + node;
       return false;
     }
