@@ -30,6 +30,7 @@ import org.apache.calcite.rex.RexBuilder;
 import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.sql.SqlNode;
 import org.apache.calcite.sql.SqlOperatorTable;
+import org.apache.calcite.sql.TypedSqlNode;
 import org.apache.calcite.sql.parser.SqlParseException;
 import org.apache.calcite.sql.parser.SqlParser;
 import org.apache.calcite.sql.validate.SqlValidator;
@@ -176,6 +177,15 @@ public class PlannerImpl implements Planner {
     }
     state = State.STATE_4_VALIDATED;
     return validatedSqlNode;
+  }
+
+  @Override
+  public TypedSqlNode validateAndGetType(SqlNode sqlNode)
+      throws ValidationException {
+    final SqlNode validatedNode = this.validate(sqlNode);
+    final RelDataType type =
+        this.validator.getValidatedNodeType(validatedNode);
+    return new TypedSqlNode(validatedNode, type);
   }
 
   public RelNode convert(SqlNode sql) throws RelConversionException {
