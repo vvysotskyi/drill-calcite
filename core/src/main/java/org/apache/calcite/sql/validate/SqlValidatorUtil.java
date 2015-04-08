@@ -717,6 +717,14 @@ public class SqlValidatorUtil {
           return Util.first(original, "$f") + Math.max(size, attempt);
         }
       };
+
+  public static final Suggester F_SUGGESTER2 =
+      new Suggester() {
+        public String apply(String original, int attempt, int size) {
+          return Util.first(original, "$f") + attempt;
+        }
+      };
+
 }
 
 // End SqlValidatorUtil.java
