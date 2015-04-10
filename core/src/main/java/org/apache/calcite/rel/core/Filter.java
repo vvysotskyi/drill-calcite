@@ -111,10 +111,10 @@ public abstract class Filter extends SingleRel {
   }
 
   @Override public boolean isValid(boolean fail) {
-    if (RexUtil.isNullabilityCast(getCluster().getTypeFactory(), condition)) {
-      assert !fail : "Cast for just nullability not allowed";
-      return false;
-    }
+//    if (RexUtil.isNullabilityCast(getCluster().getTypeFactory(), condition)) {
+//      assert !fail : "Cast for just nullability not allowed";
+//      return false;
+//    }
     final RexChecker checker = new RexChecker(getInput().getRowType(), fail);
     condition.accept(checker);
     if (checker.getFailureCount() > 0) {
