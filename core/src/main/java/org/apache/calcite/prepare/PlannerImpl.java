@@ -70,6 +70,7 @@ public class PlannerImpl implements Planner {
   private SchemaPlus defaultSchema;
   private JavaTypeFactory typeFactory;
   private RelOptPlanner planner;
+  private RelOptPlanner.Executor executor;
 
   // set in STATE_4_VALIDATE
   private CalciteSqlValidator validator;
@@ -89,6 +90,7 @@ public class PlannerImpl implements Planner {
     this.state = State.STATE_0_CLOSED;
     this.traitDefs = config.getTraitDefs();
     this.convertletTable = config.getConvertletTable();
+    this.executor = config.getExecutor();
     reset();
   }
 
@@ -133,6 +135,7 @@ public class PlannerImpl implements Planner {
             Util.discard(rootSchema); // use our own defaultSchema
             typeFactory = (JavaTypeFactory) cluster.getTypeFactory();
             planner = cluster.getPlanner();
+            planner.setExecutor(executor);
             return null;
           }
         },

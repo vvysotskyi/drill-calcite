@@ -21,6 +21,7 @@ import org.apache.calcite.jdbc.CalciteSchema;
 import org.apache.calcite.plan.Context;
 import org.apache.calcite.plan.RelOptCluster;
 import org.apache.calcite.plan.RelOptCostFactory;
+import org.apache.calcite.plan.RelOptPlanner;
 import org.apache.calcite.plan.RelOptSchema;
 import org.apache.calcite.plan.RelTraitDef;
 import org.apache.calcite.prepare.CalcitePrepareImpl;
@@ -180,6 +181,7 @@ public class Frameworks {
     private SqlParser.Config parserConfig =
         SqlParser.Config.DEFAULT;
     private SchemaPlus defaultSchema;
+    private RelOptPlanner.Executor executor;
     private RelOptCostFactory costFactory;
     private RelDataTypeSystem typeSystem = RelDataTypeSystem.DEFAULT;
 
@@ -188,11 +190,17 @@ public class Frameworks {
     public FrameworkConfig build() {
       return new StdFrameworkConfig(context, convertletTable, operatorTable,
           programs, traitDefs, parserConfig, defaultSchema, costFactory,
-          typeSystem);
+          typeSystem, executor);
     }
 
     public ConfigBuilder context(Context c) {
       this.context = Preconditions.checkNotNull(c);
+      return this;
+    }
+
+    public ConfigBuilder executor(RelOptPlanner.Executor executor) {
+      Preconditions.checkNotNull(executor);
+      this.executor = executor;
       return this;
     }
 
@@ -274,6 +282,7 @@ public class Frameworks {
     private final SchemaPlus defaultSchema;
     private final RelOptCostFactory costFactory;
     private final RelDataTypeSystem typeSystem;
+    private final RelOptPlanner.Executor executor;
 
     public StdFrameworkConfig(Context context,
         SqlRexConvertletTable convertletTable,
@@ -283,7 +292,8 @@ public class Frameworks {
         SqlParser.Config parserConfig,
         SchemaPlus defaultSchema,
         RelOptCostFactory costFactory,
-        RelDataTypeSystem typeSystem) {
+        RelDataTypeSystem typeSystem,
+        RelOptPlanner.Executor executor) {
       this.context = context;
       this.convertletTable = convertletTable;
       this.operatorTable = operatorTable;
@@ -293,6 +303,7 @@ public class Frameworks {
       this.defaultSchema = defaultSchema;
       this.costFactory = costFactory;
       this.typeSystem = typeSystem;
+      this.executor = executor;
     }
 
     public SqlParser.Config getParserConfig() {
@@ -301,6 +312,10 @@ public class Frameworks {
 
     public SchemaPlus getDefaultSchema() {
       return defaultSchema;
+    }
+
+    public RelOptPlanner.Executor getExecutor() {
+      return executor;
     }
 
     public ImmutableList<Program> getPrograms() {
