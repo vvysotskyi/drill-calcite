@@ -89,8 +89,10 @@ public class AggregatingSelectScope
       // modifies it and makes it no longer equivalent. While copying,
       // we fully qualify all identifiers.
       // final SqlNodeList groupList = select.getGroup();
-      final SqlNodeList groupList =
-          SqlValidatorUtil.DeepCopier.copy(parent, select.getGroup());
+      final SqlNodeList groupList = SqlValidatorUtil
+          .ExpansionAndDeepCopier.copy(parent,
+              select.getGroup());
+
       for (SqlNode groupExpr : groupList) {
         SqlValidatorUtil.analyzeGroupItem(this, temporaryGroupExprList,
             groupExprProjection, builder, groupExpr);
