@@ -363,10 +363,8 @@ public class RexBuilder {
                   BigDecimal.ZERO,
                   bigintType,
                   SqlTypeName.DECIMAL)),
-          ensureType(type, // SUM0 is non-nullable, thus need a cast
-              new RexOver(typeFactory.createTypeWithNullability(type, false),
+          new RexOver(typeFactory.createTypeWithNullability(type, false),
               operator, exprs, window),
-              false),
           makeCast(type, constantNull()));
     }
     if (!allowPartial) {

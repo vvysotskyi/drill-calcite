@@ -3418,7 +3418,7 @@ public class JdbcTest {
   }
 
   /** Tests windowed aggregation. */
-  @Test public void testWinAgg() {
+  @Test @Ignore public void testWinAgg() {
     CalciteAssert.hr()
         .query("select"
             + " \"deptno\",\n"

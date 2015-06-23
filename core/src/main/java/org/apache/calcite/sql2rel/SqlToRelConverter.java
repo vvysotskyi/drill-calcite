@@ -1785,9 +1785,27 @@ public class SqlToRelConverter {
       Util.permAssert(bb.window == null, "already in window agg mode");
       bb.window = window;
       RexNode rexAgg = exprConverter.convertCall(bb, aggCall);
-      rexAgg =
+
+      /**
+       * Don't invoke ensureType after rewriting the aggregate
+       * expressions part of the window function. Reason is
+       * there is an inherent difference between the data types
+       * in Drill vs Calcite.
+       * For eg:
+       * Per Calcite Avg(int) => int
+       * Per Drill   Avg(int) => double
+       *
+       * When we rewrite the Avg expression as Sum/Count and
+       * change the expected output to be double if ensureType
+       * is invoked it will end up injecting a cast to int
+       * causing wrong results. There has to be a discussion around
+       * this inherent difference between data types and functions
+       * in Drill and Calcite.
+       *
+       rexAgg =
           rexBuilder.ensureType(
               validator.getValidatedNodeType(call), rexAgg, false);
+       */
 
       // Walk over the tree and apply 'over' to all agg functions. This is
       // necessary because the returned expression is not necessarily a call

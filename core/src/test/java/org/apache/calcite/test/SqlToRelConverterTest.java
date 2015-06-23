@@ -938,7 +938,7 @@ public class SqlToRelConverterTest extends SqlToRelTestBase {
         "${plan}");
   }
 
-  @Test public void testOverMultiple() {
+  @Test @Ignore public void testOverMultiple() {
     check(
         "select sum(sal) over w1,\n"
             + "  sum(deptno) over w1,\n"
@@ -974,7 +974,7 @@ public class SqlToRelConverterTest extends SqlToRelTestBase {
         "${plan}");
   }
 
-  @Test public void testOverAvg() {
+  @Test @Ignore public void testOverAvg() {
     // AVG(x) gets translated to SUM(x)/COUNT(x).  Because COUNT controls
     // the return type there usually needs to be a final CAST to get the
     // result back to match the type of x.
@@ -986,7 +986,7 @@ public class SqlToRelConverterTest extends SqlToRelTestBase {
         "${plan}");
   }
 
-  @Test public void testOverAvg2() {
+  @Test @Ignore public void testOverAvg2() {
     // Check to see if extra CAST is present.  Because CAST is nested
     // inside AVG it passed to both SUM and COUNT so the outer final CAST
     // isn't needed.
