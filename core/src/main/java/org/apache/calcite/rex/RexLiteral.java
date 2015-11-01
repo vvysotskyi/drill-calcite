@@ -236,6 +236,8 @@ public class RexLiteral extends RexNode {
           && (((NlsString) value).getCollation() != null);
     case SYMBOL:
       return value instanceof Enum;
+    case MAP:
+      return value instanceof Map;
     case ANY:
       // Literal of type ANY is not legal. "CAST(2 AS ANY)" remains
       // an integer literal surrounded by a cast function.
@@ -377,6 +379,9 @@ public class RexLiteral extends RexNode {
       break;
     case TIMESTAMP:
       printDatetime(pw, new ZonelessTimestamp(), value);
+      break;
+    case MAP:
+      pw.print(value.toString());
       break;
     case INTERVAL_DAY_TIME:
     case INTERVAL_YEAR_MONTH:

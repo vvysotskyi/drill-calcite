@@ -207,6 +207,7 @@ public class SqlLiteral extends SqlNode {
           || (value instanceof SqlSampleSpec)
           || (value instanceof TimeUnitRange);
     case MULTISET:
+    case MAP:
       return true;
     case INTEGER: // not allowed -- use Decimal
     case VARCHAR: // not allowed -- use Char
