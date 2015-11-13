@@ -160,9 +160,9 @@ public class JdbcTest {
   public static final Method GENERATE_STRINGS_METHOD =
       Types.lookupMethod(JdbcTest.class, "generateStrings", Integer.class);
 
-  public static final Method MAZE2_METHOD =
-      Types.lookupMethod(MazeTable.class, "generate2", int.class, int.class,
-          Integer.class);
+//  public static final Method MAZE2_METHOD =
+//      Types.lookupMethod(MazeTable.class, "generate2", int.class, int.class,
+//          Integer.class);
 
   public static final Method MULTIPLICATION_TABLE_METHOD =
       Types.lookupMethod(JdbcTest.class, "multiplicationTable", int.class,
@@ -442,33 +442,33 @@ public class JdbcTest {
         equalTo("N=4; C=abcd\n"));
   }
 
-  /** As {@link #testScannableTableFunction()} but with named parameters. */
-  @Test public void testScannableTableFunctionWithNamedParameters()
-      throws SQLException, ClassNotFoundException {
-    Connection connection = DriverManager.getConnection("jdbc:calcite:");
-    CalciteConnection calciteConnection =
-        connection.unwrap(CalciteConnection.class);
-    SchemaPlus rootSchema = calciteConnection.getRootSchema();
-    SchemaPlus schema = rootSchema.add("s", new AbstractSchema());
-    final TableFunction table = TableFunctionImpl.create(MAZE2_METHOD);
-    schema.add("Maze", table);
-    final String sql = "select *\n"
-        + "from table(\"s\".\"Maze\"(5, 3, 1))";
-    ResultSet resultSet = connection.createStatement().executeQuery(sql);
-    final String result = "S=abcde\n"
-        + "S=xyz\n";
-    assertThat(CalciteAssert.toString(resultSet), equalTo(result));
-
-    final String sql2 = "select *\n"
-        + "from table(\"s\".\"Maze\"(WIDTH => 5, HEIGHT => 3, SEED => 1))";
-    resultSet = connection.createStatement().executeQuery(sql2);
-    assertThat(CalciteAssert.toString(resultSet), equalTo(result));
-
-    final String sql3 = "select *\n"
-        + "from table(\"s\".\"Maze\"(HEIGHT => 3, WIDTH => 5))";
-    resultSet = connection.createStatement().executeQuery(sql3);
-    assertThat(CalciteAssert.toString(resultSet), equalTo(result));
-  }
+//  /** As {@link #testScannableTableFunction()} but with named parameters. */
+//  @Test public void testScannableTableFunctionWithNamedParameters()
+//      throws SQLException, ClassNotFoundException {
+//    Connection connection = DriverManager.getConnection("jdbc:calcite:");
+//    CalciteConnection calciteConnection =
+//        connection.unwrap(CalciteConnection.class);
+//    SchemaPlus rootSchema = calciteConnection.getRootSchema();
+//    SchemaPlus schema = rootSchema.add("s", new AbstractSchema());
+//    final TableFunction table = TableFunctionImpl.create(MAZE2_METHOD);
+//    schema.add("Maze", table);
+//    final String sql = "select *\n"
+//        + "from table(\"s\".\"Maze\"(5, 3, 1))";
+//    ResultSet resultSet = connection.createStatement().executeQuery(sql);
+//    final String result = "S=abcde\n"
+//        + "S=xyz\n";
+//    assertThat(CalciteAssert.toString(resultSet), equalTo(result));
+//
+//    final String sql2 = "select *\n"
+//        + "from table(\"s\".\"Maze\"(WIDTH => 5, HEIGHT => 3, SEED => 1))";
+//    resultSet = connection.createStatement().executeQuery(sql2);
+//    assertThat(CalciteAssert.toString(resultSet), equalTo(result));
+//
+//    final String sql3 = "select *\n"
+//        + "from table(\"s\".\"Maze\"(HEIGHT => 3, WIDTH => 5))";
+//    resultSet = connection.createStatement().executeQuery(sql3);
+//    assertThat(CalciteAssert.toString(resultSet), equalTo(result));
+//  }
 
   /**
    * Tests a table function that returns different row type based on
