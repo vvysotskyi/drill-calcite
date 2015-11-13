@@ -12,3 +12,5 @@ settings.xml
 .classpath
 .settings
 .checkstyle
+.externalToolBuilders
+maven-eclipse.xml
