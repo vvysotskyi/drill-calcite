@@ -31,7 +31,6 @@ import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 
 import java.util.Collection;
-import java.util.Collections;
 import java.util.Map;
 import java.util.NavigableMap;
 import java.util.NavigableSet;
@@ -131,12 +130,12 @@ public class SimpleCalciteSchema extends CalciteAbstractSchema {
 
   @Override
   public Collection<Function> getFunctions(String name, boolean caseSensitive) {
-    return Collections.EMPTY_LIST;
+    return schema.getFunctions(name);
   }
 
   @Override
   public NavigableSet<String> getFunctionNames() {
-    return Compatible.INSTANCE.navigableSet(ImmutableSortedSet.<String>of());
+    return Compatible.INSTANCE.navigableSet(ImmutableSortedSet.copyOf(schema.getFunctionNames()));
   }
 
   @Override
