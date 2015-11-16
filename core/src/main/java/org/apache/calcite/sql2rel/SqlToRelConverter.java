@@ -2709,6 +2709,13 @@ public class SqlToRelConverter {
 
     SqlNode converted = validator.expandOrderExpr(select, orderItem);
 
+    switch (nullDirection) {
+    case UNSPECIFIED:
+      nullDirection = validator.getDefaultNullCollation().last(desc(direction))
+          ? RelFieldCollation.NullDirection.LAST
+          : RelFieldCollation.NullDirection.FIRST;
+    }
+
     // Scan the select list and order exprs for an identical expression.
     final SelectScope selectScope = validator.getRawSelectScope(select);
     int ordinal = -1;
@@ -2733,6 +2740,16 @@ public class SqlToRelConverter {
 
     extraExprs.add(converted);
     return new RelFieldCollation(ordinal + 1, direction, nullDirection);
+  }
+
+  private static boolean desc(RelFieldCollation.Direction direction) {
+    switch (direction) {
+    case DESCENDING:
+    case STRICTLY_DESCENDING:
+      return true;
+    default:
+      return false;
+    }
   }
 
   protected boolean enableDecorrelation() {

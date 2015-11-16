@@ -227,7 +227,7 @@ public abstract class SqlToRelTestBase {
       final List<RelCollation> collationList = deduceMonotonicity(table);
       if (names.size() < 3) {
         String[] newNames2 = {"CATALOG", "SALES", ""};
-        List<String> newNames = new ArrayList<String>();
+        List<String> newNames = new ArrayList<>();
         int i = 0;
         while (newNames.size() < newNames2.length) {
           newNames.add(i, newNames2[i]);
@@ -240,8 +240,7 @@ public abstract class SqlToRelTestBase {
 
     private List<RelCollation> deduceMonotonicity(SqlValidatorTable table) {
       final RelDataType rowType = table.getRowType();
-      final List<RelCollation> collationList =
-          new ArrayList<RelCollation>();
+      final List<RelCollation> collationList = new ArrayList<>();
 
       // Deduce which fields the table is sorted on.
       int i = -1;
@@ -255,9 +254,7 @@ public abstract class SqlToRelTestBase {
                   ? RelFieldCollation.Direction.DESCENDING
                   : RelFieldCollation.Direction.ASCENDING;
           collationList.add(
-              RelCollations.of(
-                  new RelFieldCollation(i, direction,
-                      RelFieldCollation.NullDirection.UNSPECIFIED)));
+              RelCollations.of(new RelFieldCollation(i, direction)));
         }
       }
       return collationList;
@@ -275,7 +272,7 @@ public abstract class SqlToRelTestBase {
           new DelegatingRelOptTable(table) {
             public List<String> getQualifiedName() {
               final List<String> list =
-                  new ArrayList<String>(super.getQualifiedName());
+                  new ArrayList<>(super.getQualifiedName());
               list.set(
                   list.size() - 1,
                   list.get(list.size() - 1) + ":" + datasetName);
@@ -555,8 +552,7 @@ public abstract class SqlToRelTestBase {
 
     public SqlNode parseQuery(String sql) throws Exception {
       SqlParser parser = SqlParser.create(sql);
-      SqlNode sqlNode = parser.parseQuery();
-      return sqlNode;
+      return parser.parseQuery();
     }
 
     public SqlConformance getConformance() {
