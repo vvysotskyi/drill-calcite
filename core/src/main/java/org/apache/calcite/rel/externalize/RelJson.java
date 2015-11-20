@@ -338,11 +338,7 @@ public class RelJson {
           map.put("type", toJson(node.getType()));
         }
         if (call.getOperator() instanceof SqlFunction) {
-          switch (((SqlFunction) call.getOperator()).getFunctionType()) {
-          case USER_DEFINED_CONSTRUCTOR:
-          case USER_DEFINED_FUNCTION:
-          case USER_DEFINED_PROCEDURE:
-          case USER_DEFINED_SPECIFIC_FUNCTION:
+          if (((SqlFunction) call.getOperator()).getFunctionType().isUserdefined()) {
             map.put("class", call.getOperator().getClass().getName());
           }
         }
