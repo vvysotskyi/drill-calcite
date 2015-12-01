@@ -20,7 +20,7 @@ limitations under the License.
   <parent>
     <groupId>org.apache.calcite</groupId>
     <artifactId>calcite</artifactId>
-    <version>1.4.0-drill-r9</version>
+    <version>1.4.0-drill-r10</version>
   </parent>
 
   <properties>
