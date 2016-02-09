@@ -35,16 +35,9 @@ public class SqlRankFunction extends SqlAggFunction {
 
   //~ Constructors -----------------------------------------------------------
 
-  public SqlRankFunction(String name, boolean requiresOrder) {
-    super(
-        name,
-        null,
-        SqlKind.OTHER_FUNCTION,
-        ReturnTypes.INTEGER,
-        null,
-        OperandTypes.NILADIC,
-        SqlFunctionCategory.NUMERIC,
-        requiresOrder,
+  public SqlRankFunction(boolean requiresOrder, SqlKind kind) {
+    super(kind.name(), null, kind, ReturnTypes.INTEGER, null,
+        OperandTypes.NILADIC, SqlFunctionCategory.NUMERIC, requiresOrder,
         true);
   }
 
