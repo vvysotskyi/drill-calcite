@@ -31,15 +31,14 @@ import org.apache.calcite.rex.RexChecker;
 import org.apache.calcite.rex.RexNode;
 import org.apache.calcite.rex.RexShuttle;
 import org.apache.calcite.sql.type.SqlTypeName;
+import org.apache.calcite.sql.validate.SqlValidatorUtil;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
-import java.util.TreeSet;
 
 /**
  * Relational expression that combines two relational expressions according to
@@ -192,13 +191,9 @@ public abstract class Join extends BiRel {
             !getSystemFieldList().isEmpty());
   }
 
-  protected RelDataType deriveRowType() {
-    return deriveJoinRowType(
-        left.getRowType(),
-        right.getRowType(),
-        joinType,
-        getCluster().getTypeFactory(),
-        null,
+  @Override protected RelDataType deriveRowType() {
+    return SqlValidatorUtil.deriveJoinRowType(left.getRowType(),
+        right.getRowType(), joinType, getCluster().getTypeFactory(), null,
         getSystemFieldList());
   }
 
@@ -225,20 +220,7 @@ public abstract class Join extends BiRel {
     return Collections.emptyList();
   }
 
-  /**
-   * Derives the type of a join relational expression.
-   *
-   * @param leftType        Row type of left input to join
-   * @param rightType       Row type of right input to join
-   * @param joinType        Type of join
-   * @param typeFactory     Type factory
-   * @param fieldNameList   List of names of fields; if null, field names are
-   *                        inherited and made unique
-   * @param systemFieldList List of system fields that will be prefixed to
-   *                        output row type; typically empty but must not be
-   *                        null
-   * @return join type
-   */
+  @Deprecated // to be removed before 2.0
   public static RelDataType deriveJoinRowType(
       RelDataType leftType,
       RelDataType rightType,
@@ -246,100 +228,19 @@ public abstract class Join extends BiRel {
       RelDataTypeFactory typeFactory,
       List<String> fieldNameList,
       List<RelDataTypeField> systemFieldList) {
-    assert systemFieldList != null;
-    switch (joinType) {
-    case LEFT:
-      rightType = typeFactory.createTypeWithNullability(rightType, true);
-      break;
-    case RIGHT:
-      leftType = typeFactory.createTypeWithNullability(leftType, true);
-      break;
-    case FULL:
-      leftType = typeFactory.createTypeWithNullability(leftType, true);
-      rightType = typeFactory.createTypeWithNullability(rightType, true);
-      break;
-    default:
-      break;
-    }
-    return createJoinType(
-        typeFactory, leftType, rightType, fieldNameList, systemFieldList);
+    return SqlValidatorUtil.deriveJoinRowType(leftType, rightType, joinType,
+        typeFactory, fieldNameList, systemFieldList);
   }
 
-  /**
-   * Returns the type the row which results when two relations are joined.
-   *
-   * <p>The resulting row type consists of
-   * the system fields (if any), followed by
-   * the fields of the left type, followed by
-   * the fields of the right type. The field name list, if present, overrides
-   * the original names of the fields.
-   *
-   * @param typeFactory     Type factory
-   * @param leftType        Type of left input to join
-   * @param rightType       Type of right input to join
-   * @param fieldNameList   If not null, overrides the original names of the
-   *                        fields
-   * @param systemFieldList List of system fields that will be prefixed to
-   *                        output row type; typically empty but must not be
-   *                        null
-   * @return type of row which results when two relations are joined
-   */
+  @Deprecated // to be removed before 2.0
   public static RelDataType createJoinType(
       RelDataTypeFactory typeFactory,
       RelDataType leftType,
       RelDataType rightType,
       List<String> fieldNameList,
       List<RelDataTypeField> systemFieldList) {
-    assert (fieldNameList == null)
-        || (fieldNameList.size()
-        == (systemFieldList.size()
-        + leftType.getFieldCount()
-        + rightType.getFieldCount()));
-    List<String> nameList = new ArrayList<String>();
-    List<RelDataType> typeList = new ArrayList<RelDataType>();
-
-    // We need to keep track of the field name uniqueness; a HashSet
-    // could have been used for better performance but it does
-    // not allow passing in a comparator; instead use a TreeSet and
-    // pass case-insensitive comparator (pending CALCITE-528 fix which
-    // should incorporate parser configuration for this comparison).
-    TreeSet<String> uniqueNameList = new
-        TreeSet<String>(String.CASE_INSENSITIVE_ORDER);
-    addFields(systemFieldList, typeList, nameList, uniqueNameList);
-    addFields(leftType.getFieldList(), typeList, nameList, uniqueNameList);
-    if (rightType != null) {
-      addFields(
-          rightType.getFieldList(), typeList, nameList, uniqueNameList);
-    }
-    if (fieldNameList != null) {
-      assert fieldNameList.size() == nameList.size();
-      nameList = fieldNameList;
-    }
-    return typeFactory.createStructType(typeList, nameList);
-  }
-
-  private static void addFields(
-      List<RelDataTypeField> fieldList,
-      List<RelDataType> typeList,
-      List<String> nameList,
-      TreeSet<String> uniqueNameList) {
-    for (RelDataTypeField field : fieldList) {
-      String name = field.getName();
-
-      // Ensure that name is unique from all previous field names
-      if (uniqueNameList.contains(name)) {
-        String nameBase = name;
-        for (int j = 0;; j++) {
-          name = nameBase + j;
-          if (!uniqueNameList.contains(name)) {
-            break;
-          }
-        }
-      }
-      nameList.add(name);
-      uniqueNameList.add(name);
-      typeList.add(field.getType());
-    }
+    return SqlValidatorUtil.createJoinType(typeFactory, leftType, rightType,
+        fieldNameList, systemFieldList);
   }
 
   @Override public final Join copy(RelTraitSet traitSet, List<RelNode> inputs) {

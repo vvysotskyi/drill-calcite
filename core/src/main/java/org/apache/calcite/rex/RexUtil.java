@@ -32,6 +32,7 @@ import org.apache.calcite.sql.SqlOperator;
 import org.apache.calcite.sql.fun.SqlStdOperatorTable;
 import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.sql.type.SqlTypeUtil;
+import org.apache.calcite.sql.validate.SqlValidatorUtil;
 import org.apache.calcite.util.ControlFlowException;
 import org.apache.calcite.util.Pair;
 import org.apache.calcite.util.Util;
@@ -524,7 +525,7 @@ public class RexUtil {
   public static RelDataType createStructType(
       RelDataTypeFactory typeFactory,
       final List<RexNode> exprs) {
-    return createStructType(typeFactory, exprs, null);
+    return createStructType(typeFactory, exprs, null, null);
   }
 
   /**
@@ -538,12 +539,19 @@ public class RexUtil {
    * @param typeFactory Type factory
    * @param exprs       Expressions
    * @param names       Field names, may be null, or elements may be null
+   * @param suggester   Generates alternative names if {@code names} is not
+   *                    null and its elements are not unique
    * @return Record type
    */
   public static RelDataType createStructType(
       RelDataTypeFactory typeFactory,
       final List<? extends RexNode> exprs,
-      final List<String> names) {
+      List<String> names,
+      SqlValidatorUtil.Suggester suggester) {
+    if (names != null && suggester != null) {
+      names = SqlValidatorUtil.uniquify(names, suggester,
+          typeFactory.getTypeSystem().isSchemaCaseSensitive());
+    }
     final RelDataTypeFactory.FieldInfoBuilder builder =
         typeFactory.builder();
     for (int i = 0; i < exprs.size(); i++) {
@@ -554,6 +562,14 @@ public class RexUtil {
       builder.add(name, exprs.get(i).getType());
     }
     return builder.build();
+  }
+
+  @Deprecated // to be removed before 2.0
+  public static RelDataType createStructType(
+      RelDataTypeFactory typeFactory,
+      final List<? extends RexNode> exprs,
+      List<String> names) {
+    return createStructType(typeFactory, exprs, names, null);
   }
 
   /**

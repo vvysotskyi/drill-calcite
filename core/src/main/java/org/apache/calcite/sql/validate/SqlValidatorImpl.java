@@ -103,6 +103,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.Stack;
+import java.util.TreeSet;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -335,7 +336,9 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
           selectItem,
           select,
           list,
-          new LinkedHashSet<String>(),
+          catalogReader.isCaseSensitive()
+          ? new LinkedHashSet<String>()
+              : new TreeSet<String>(String.CASE_INSENSITIVE_ORDER),
           types,
           includeSystemVars);
     }

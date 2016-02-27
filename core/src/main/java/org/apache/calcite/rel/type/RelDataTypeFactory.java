@@ -19,6 +19,7 @@ package org.apache.calcite.rel.type;
 import org.apache.calcite.sql.SqlCollation;
 import org.apache.calcite.sql.SqlIntervalQualifier;
 import org.apache.calcite.sql.type.SqlTypeName;
+import org.apache.calcite.sql.validate.SqlValidatorUtil;
 
 import java.nio.charset.Charset;
 import java.util.ArrayList;
@@ -289,7 +290,7 @@ public interface RelDataTypeFactory {
   /**
    * Callback which provides enough information to create fields.
    */
-  public interface FieldInfo {
+  interface FieldInfo {
     /**
      * Returns the number of fields.
      *
@@ -318,9 +319,9 @@ public interface RelDataTypeFactory {
    * Implementation of {@link FieldInfo} that provides a fluid API to build
    * a list of fields.
    */
-  public static class FieldInfoBuilder implements FieldInfo {
-    private final List<String> names = new ArrayList<String>();
-    private final List<RelDataType> types = new ArrayList<RelDataType>();
+  class FieldInfoBuilder implements FieldInfo {
+    private final List<String> names = new ArrayList<>();
+    private final List<RelDataType> types = new ArrayList<>();
 
     private final RelDataTypeFactory typeFactory;
 
@@ -413,6 +414,19 @@ public interface RelDataTypeFactory {
         Iterable<? extends Map.Entry<String, RelDataType>> fields) {
       for (Map.Entry<String, RelDataType> field : fields) {
         add(field.getKey(), field.getValue());
+      }
+      return this;
+    }
+
+    /**
+     * Makes sure that field names are unique.
+     */
+    public FieldInfoBuilder uniquify() {
+      final List<String> uniqueNames = SqlValidatorUtil.uniquify(names,
+          typeFactory.getTypeSystem().isSchemaCaseSensitive());
+      if (uniqueNames != names) {
+        names.clear();
+        names.addAll(uniqueNames);
       }
       return this;
     }

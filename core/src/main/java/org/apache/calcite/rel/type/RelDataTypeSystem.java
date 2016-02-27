@@ -67,6 +67,16 @@ public interface RelDataTypeSystem {
 
   /** Returns the numeric type Radix, 2 or 10. 0 represent not applicable*/
   int getNumTypeRadix(SqlTypeName typeName);
+
+  /**
+   * Returns the return type of SUM aggregate function inferred from its
+   * argument type.
+   */
+  RelDataType deriveSumType(RelDataTypeFactory typeFactory, RelDataType argumentType);
+
+  /** Whether two record types are considered distinct if their field names
+   * are the same but in different cases. */
+  boolean isSchemaCaseSensitive();
 }
 
 // End RelDataTypeSystem.java

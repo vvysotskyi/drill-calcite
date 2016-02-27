@@ -35,6 +35,7 @@ import org.apache.calcite.rex.RexLocalRef;
 import org.apache.calcite.rex.RexNode;
 import org.apache.calcite.rex.RexProgram;
 import org.apache.calcite.rex.RexProgramBuilder;
+import org.apache.calcite.sql.validate.SqlValidatorUtil;
 import org.apache.calcite.util.Pair;
 
 import java.util.ArrayList;
@@ -167,7 +168,7 @@ public class JoinProjectTransposeRule extends RelOptRule {
     // into the bottom RexProgram.  Note that the join type is an inner
     // join because the inputs haven't actually been joined yet.
     RelDataType joinChildrenRowType =
-        Join.deriveJoinRowType(
+        SqlValidatorUtil.deriveJoinRowType(
             leftJoinChild.getRowType(),
             rightJoinChild.getRowType(),
             JoinRelType.INNER,
