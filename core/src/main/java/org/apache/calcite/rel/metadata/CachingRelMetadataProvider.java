@@ -22,6 +22,7 @@ import org.apache.calcite.rel.RelNode;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Multimap;
 
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.InvocationTargetException;
@@ -85,7 +86,7 @@ public class CachingRelMetadataProvider implements RelMetadataProvider {
     };
   }
 
-  public <M extends Metadata> Map<Method, MetadataHandler<M>>
+  public <M extends Metadata> Multimap<Method, MetadataHandler<M>>
   handlers(MetadataDef<M> def) {
     return underlyingProvider.handlers(def);
   }

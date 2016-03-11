@@ -17,6 +17,7 @@
 package org.apache.calcite.test;
 
 import org.apache.calcite.adapter.enumerable.EnumerableMergeJoin;
+import org.apache.calcite.linq4j.tree.Types;
 import org.apache.calcite.plan.RelOptCluster;
 import org.apache.calcite.plan.RelOptPlanner;
 import org.apache.calcite.plan.RelOptPredicateList;
@@ -46,6 +47,7 @@ import org.apache.calcite.rel.logical.LogicalValues;
 import org.apache.calcite.rel.metadata.CachingRelMetadataProvider;
 import org.apache.calcite.rel.metadata.ChainedRelMetadataProvider;
 import org.apache.calcite.rel.metadata.DefaultRelMetadataProvider;
+import org.apache.calcite.rel.metadata.JaninoRelMetadataProvider;
 import org.apache.calcite.rel.metadata.Metadata;
 import org.apache.calcite.rel.metadata.MetadataDef;
 import org.apache.calcite.rel.metadata.MetadataHandler;
@@ -677,7 +679,7 @@ public class RelMetadataTest extends SqlToRelTestBase {
     assertUniqueConsistent(rel);
   }
 
-  @Test public void testCustomProvider() {
+  @Test public void testBrokenCustomProvider() {
     final List<String> buf = Lists.newArrayList();
     ColTypeImpl.THREAD_LIST.set(buf);
 
@@ -1098,28 +1100,27 @@ public class RelMetadataTest extends SqlToRelTestBase {
 
   /** Custom metadata interface. */
   public interface ColType extends Metadata {
+    Method METHOD = Types.lookupMethod(ColType.class, "getColType", int.class);
+
+    MetadataDef<ColType> DEF =
+        MetadataDef.of(ColType.class, ColType.Handler.class, METHOD);
+
     String getColType(int column);
+
+    /** Handler API. */
+    interface Handler extends MetadataHandler<ColType> {
+      String getColType(RelNode r, RelMetadataQuery mq, int column);
+    }
   }
 
   /** A provider for {@link org.apache.calcite.test.RelMetadataTest.ColType} via
    * reflection. */
-  public static class ColTypeImpl implements MetadataHandler {
+  public abstract static class PartialColTypeImpl
+      implements MetadataHandler<ColType> {
     static final ThreadLocal<List<String>> THREAD_LIST = new ThreadLocal<>();
-    static final Method METHOD;
-    static {
-      try {
-        METHOD = ColType.class.getMethod("getColType", int.class);
-      } catch (NoSuchMethodException e) {
-        throw new RuntimeException(e);
-      }
-    }
 
-    public static final RelMetadataProvider SOURCE =
-        ReflectiveRelMetadataProvider.reflectiveSource(
-            METHOD, new ColTypeImpl());
-
-    public MetadataDef getDef() {
-      throw new UnsupportedOperationException();
+    public MetadataDef<ColType> getDef() {
+      return ColType.DEF;
     }
 
     /** Implementation of {@link ColType#getColType(int)} for
@@ -1132,6 +1133,13 @@ public class RelMetadataTest extends SqlToRelTestBase {
       THREAD_LIST.get().add(name);
       return name;
     }
+  }
+
+  /** A provider for {@link org.apache.calcite.test.RelMetadataTest.ColType} via
+   * reflection. */
+  public static class ColTypeImpl extends PartialColTypeImpl {
+    public static final RelMetadataProvider SOURCE =
+        ReflectiveRelMetadataProvider.reflectiveSource(ColType.METHOD, new ColTypeImpl());
 
     /** Implementation of {@link ColType#getColType(int)} for
      * {@link RelNode}, called via reflection. */
@@ -1141,6 +1149,35 @@ public class RelMetadataTest extends SqlToRelTestBase {
           rel.getRowType().getFieldList().get(column).getName() + "-rel";
       THREAD_LIST.get().add(name);
       return name;
+    }
+  }
+
+  /** Implementation of {@link ColType} that has no fall-back for {@link RelNode}. */
+  public static class BrokenColTypeImpl extends PartialColTypeImpl {
+    public static final RelMetadataProvider SOURCE =
+        ReflectiveRelMetadataProvider.reflectiveSource(ColType.METHOD,
+            new BrokenColTypeImpl());
+  }
+
+  /** Extension to {@link RelMetadataQuery} to support {@link ColType}.
+   *
+   * <p>Illustrates how you would package up a user-defined metadata type. */
+  private static class MyRelMetadataQuery extends RelMetadataQuery {
+    private ColType.Handler colTypeHandler;
+
+    public MyRelMetadataQuery() {
+      super(THREAD_PROVIDERS.get(), EMPTY);
+      colTypeHandler = initialHandler(ColType.Handler.class);
+    }
+
+    public String colType(RelNode rel, int column) {
+      for (;;) {
+        try {
+          return colTypeHandler.getColType(rel, this, column);
+        } catch (JaninoRelMetadataProvider.NoHandler e) {
+          colTypeHandler = revise(e.relClass, ColType.DEF);
+        }
+      }
     }
   }
 }
