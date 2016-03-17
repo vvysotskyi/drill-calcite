@@ -3310,6 +3310,26 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
     AggregatingSelectScope aggregatingScope = null;
     if (selectScope instanceof AggregatingSelectScope) {
       aggregatingScope = (AggregatingSelectScope) selectScope;
+
+      // The groupExprList of aggregatingScope is created by deep-copy of select.getGroup().
+      // See [1], [2]. Thus, we need to additionally validate each expr in
+      // aggregatingScope.groupExprList.
+      // [1] [StarColumn] Reverse one change in CALCITE-356, which regresses AggChecker logic,
+      //     after * query in schema-less table is added.
+      // [2] [StarColumn] When group-by a column,
+      //     projecting on a star which cannot be expanded at planning time,
+      //     use ITEM operator to wrap this column
+      for (SqlNode node : aggregatingScope.groupExprList) {
+        switch (node.getKind()) {
+        case GROUPING_SETS:
+        case ROLLUP:
+        case CUBE:
+          node.validate(this, groupScope);
+          break;
+        default:
+          node.validateExpr(this, groupScope);
+        }
+      }
     }
     for (SqlNode groupItem : groupList) {
       if (groupItem instanceof SqlNodeList
