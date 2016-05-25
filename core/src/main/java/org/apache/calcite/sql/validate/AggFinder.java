@@ -18,18 +18,21 @@ package org.apache.calcite.sql.validate;
 
 import org.apache.calcite.sql.SqlCall;
 import org.apache.calcite.sql.SqlFunction;
+import org.apache.calcite.sql.SqlFunctionCategory;
 import org.apache.calcite.sql.SqlKind;
 import org.apache.calcite.sql.SqlNode;
 import org.apache.calcite.sql.SqlOperator;
 import org.apache.calcite.sql.SqlOperatorTable;
+import org.apache.calcite.sql.SqlSyntax;
 import org.apache.calcite.sql.util.SqlBasicVisitor;
 import org.apache.calcite.util.Util;
 
 import static org.apache.calcite.sql.SqlKind.QUERY;
-import static org.apache.calcite.sql.SqlSyntax.FUNCTION;
 
 import com.google.common.collect.Lists;
 
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.List;
 
 /**
@@ -39,8 +42,17 @@ import java.util.List;
 class AggFinder extends SqlBasicVisitor<Void> {
   //~ Instance fields --------------------------------------------------------
 
+  // Maximum allowed nesting level of aggregates
+  private static final int MAX_AGG_LEVEL = 2;
   private final SqlOperatorTable opTab;
   private final boolean over;
+
+  private boolean nestedAgg;                        // Allow nested aggregates
+
+  // Stores aggregate nesting level while visiting the tree to keep track of
+  // nested aggregates within window aggregates. An explicit stack is used
+  // instead of recursion to obey the SqlVisitor interface
+  private Deque<Integer> aggLevelStack;
 
   //~ Constructors -----------------------------------------------------------
 
@@ -54,9 +66,49 @@ class AggFinder extends SqlBasicVisitor<Void> {
   AggFinder(SqlOperatorTable opTab, boolean over) {
     this.opTab = opTab;
     this.over = over;
+    this.nestedAgg = false;
+    this.aggLevelStack = new ArrayDeque<Integer>();
   }
 
   //~ Methods ----------------------------------------------------------------
+
+  /**
+   * Allows nested aggregates within window aggregates
+   */
+  public void enableNestedAggregates()  {
+    this.nestedAgg = true;
+    this.aggLevelStack.clear();
+  }
+
+  /**
+   * Disallows nested aggregates within window aggregates
+   */
+  public void disableNestedAggregates()  {
+    this.nestedAgg = false;
+    this.aggLevelStack.clear();
+  }
+
+  public void addAggLevel(int aggLevel) {
+    aggLevelStack.push(aggLevel);
+  }
+
+  public void removeAggLevel() {
+    if (!aggLevelStack.isEmpty()) {
+      aggLevelStack.pop();
+    }
+  }
+
+  public int getAggLevel() {
+    if (!aggLevelStack.isEmpty()) {
+      return aggLevelStack.peek();
+    } else {
+      return -1;
+    }
+  }
+
+  public boolean isEmptyAggLevel() {
+    return aggLevelStack.isEmpty();
+  }
 
   /**
    * Finds an aggregate.
@@ -88,19 +140,38 @@ class AggFinder extends SqlBasicVisitor<Void> {
 
   public Void visit(SqlCall call) {
     final SqlOperator operator = call.getOperator();
+    final int parAggLevel = this.getAggLevel(); //parent aggregate nesting level
+    // If nested aggregates disallowed or found an aggregate at invalid level
     if (operator.isAggregator()) {
-      throw new Util.FoundOne(call);
+      if (!nestedAgg || (parAggLevel + 1) > MAX_AGG_LEVEL) {
+        throw new Util.FoundOne(call);
+      } else {
+        if (parAggLevel >= 0) {
+          this.addAggLevel(parAggLevel + 1);
+        }
+      }
+    } else {
+      // Add the parent aggregate level before visiting its children
+      if (parAggLevel >= 0) {
+        this.addAggLevel(parAggLevel);
+      }
     }
     // User-defined function may not be resolved yet.
-    if (operator instanceof SqlFunction) {
-      SqlFunction sqlFunction = (SqlFunction) operator;
-      if (sqlFunction.getFunctionType().isUnresolvedUserDefinedFunction()) {
-        final List<SqlOperator> list = Lists.newArrayList();
-        opTab.lookupOperatorOverloads(sqlFunction.getSqlIdentifier(),
-            sqlFunction.getFunctionType(), FUNCTION, list);
-        for (SqlOperator sqlOperator : list) {
-          if (sqlOperator.isAggregator()) {
+    if (operator instanceof SqlFunction
+        && ((SqlFunction) operator).getFunctionType()
+        == SqlFunctionCategory.USER_DEFINED_FUNCTION) {
+      final List<SqlOperator> list = Lists.newArrayList();
+      opTab.lookupOperatorOverloads(((SqlFunction) operator).getSqlIdentifier(),
+          SqlFunctionCategory.USER_DEFINED_FUNCTION, SqlSyntax.FUNCTION, list);
+      for (SqlOperator sqlOperator : list) {
+        if (sqlOperator.isAggregator()) {
+          // If nested aggregates disallowed or found aggregate at invalid level
+          if (!nestedAgg || (parAggLevel + 1) > MAX_AGG_LEVEL) {
             throw new Util.FoundOne(call);
+          } else {
+            if (parAggLevel >= 0) {
+              this.addAggLevel(parAggLevel + 1);
+            }
           }
         }
       }
@@ -117,7 +188,12 @@ class AggFinder extends SqlBasicVisitor<Void> {
         return null;
       }
     }
-    return super.visit(call);
+    super.visit(call);
+    // Remove the parent aggregate level after visiting its children
+    if (parAggLevel >= 0) {
+      this.removeAggLevel();
+    }
+    return null;
   }
 }
 
