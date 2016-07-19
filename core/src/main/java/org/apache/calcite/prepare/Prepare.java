@@ -209,15 +209,20 @@ public abstract class Prepare {
 
     init(runtimeContextClass);
 
-    SqlToRelConverter sqlToRelConverter =
-        getSqlToRelConverter(validator, catalogReader);
+    final SqlToRelConverter.ConfigBuilder builder =
+        SqlToRelConverter.configBuilder()
+            .withTrimUnusedFields(true)
+            .withExplain(sqlQuery.getKind() == SqlKind.EXPLAIN);
+    final SqlToRelConverter sqlToRelConverter =
+        getSqlToRelConverter(validator, catalogReader, builder.build());
 
     SqlExplain sqlExplain = null;
     if (sqlQuery.getKind() == SqlKind.EXPLAIN) {
       // dig out the underlying SQL statement
       sqlExplain = (SqlExplain) sqlQuery;
       sqlQuery = sqlExplain.getExplicandum();
-      sqlToRelConverter.setIsExplain(sqlExplain.getDynamicParamCount());
+      sqlToRelConverter.setDynamicParamCountInExplain(
+          sqlExplain.getDynamicParamCount());
     }
 
     RelNode rootRel =
@@ -323,7 +328,8 @@ public abstract class Prepare {
    */
   protected abstract SqlToRelConverter getSqlToRelConverter(
       SqlValidator validator,
-      CatalogReader catalogReader);
+      CatalogReader catalogReader,
+      SqlToRelConverter.Config config);
 
   public abstract RelNode flattenTypes(
       RelNode rootRel,
@@ -342,10 +348,11 @@ public abstract class Prepare {
    * @return Trimmed relational expression
    */
   protected RelNode trimUnusedFields(RelNode rootRel) {
+    final SqlToRelConverter.Config config = SqlToRelConverter.configBuilder()
+        .withTrimUnusedFields(shouldTrim(rootRel))
+        .build();
     final SqlToRelConverter converter =
-        getSqlToRelConverter(
-            getSqlValidator(), catalogReader);
-    converter.setTrimUnusedFields(shouldTrim(rootRel));
+        getSqlToRelConverter(getSqlValidator(), catalogReader, config);
     return converter.trimUnusedFields(rootRel);
   }
 

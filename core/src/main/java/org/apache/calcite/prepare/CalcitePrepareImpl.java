@@ -287,14 +287,20 @@ public class CalcitePrepareImpl implements CalcitePrepare {
             : EnumerableConvention.INSTANCE;
     final HepPlanner planner = new HepPlanner(new HepProgramBuilder().build());
     planner.addRelTraitDef(ConventionTraitDef.INSTANCE);
+
+    final SqlToRelConverter.ConfigBuilder configBuilder =
+        SqlToRelConverter.configBuilder().withTrimUnusedFields(true);
+    if (analyze) {
+      configBuilder.withConvertTableAccess(false);
+    }
+
     final CalcitePreparingStmt preparingStmt =
         new CalcitePreparingStmt(this, context, catalogReader, typeFactory,
             context.getRootSchema(), null, planner, resultConvention);
     final SqlToRelConverter converter =
-        preparingStmt.getSqlToRelConverter(validator, catalogReader);
-    if (analyze) {
-      converter.enableTableAccessConversion(false);
-    }
+        preparingStmt.getSqlToRelConverter(validator, catalogReader,
+            configBuilder.build());
+
     final RelNode relNode = converter.convertQuery(sqlNode1, false, true);
     if (analyze) {
       return analyze_(validator, sql, sqlNode1, relNode, fail);
@@ -965,12 +971,12 @@ public class CalcitePrepareImpl implements CalcitePrepare {
 
     @Override protected SqlToRelConverter getSqlToRelConverter(
         SqlValidator validator,
-        CatalogReader catalogReader) {
+        CatalogReader catalogReader,
+        SqlToRelConverter.Config config) {
       final RelOptCluster cluster = prepare.createCluster(planner, rexBuilder);
       SqlToRelConverter sqlToRelConverter =
           new SqlToRelConverter(this, validator, catalogReader, cluster,
-              StandardConvertletTable.INSTANCE);
-      sqlToRelConverter.setTrimUnusedFields(true);
+              StandardConvertletTable.INSTANCE, config);
       return sqlToRelConverter;
     }
 
@@ -1007,9 +1013,10 @@ public class CalcitePrepareImpl implements CalcitePrepare {
           this.catalogReader.withSchemaPath(schemaPath);
       SqlValidator validator = createSqlValidator(catalogReader);
       SqlNode sqlNode1 = validator.validate(sqlNode);
-
+      final SqlToRelConverter.Config config = SqlToRelConverter.configBuilder()
+              .withTrimUnusedFields(true).build();
       SqlToRelConverter sqlToRelConverter =
-          getSqlToRelConverter(validator, catalogReader);
+          getSqlToRelConverter(validator, catalogReader, config);
       RelNode relNode =
           sqlToRelConverter.convertQuery(sqlNode1, true, false);
 

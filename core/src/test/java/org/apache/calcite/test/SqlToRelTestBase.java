@@ -194,6 +194,10 @@ public abstract class SqlToRelTestBase {
     /** Returns a tester that optionally decorrelates queries. */
     Tester withDecorrelation(boolean enable);
 
+    /** Returns a tester that optionally uses a
+     * {@code SqlToRelConverter.Config}. */
+    Tester withConfig(SqlToRelConverter.Config config);
+
     Tester withCatalogReaderFactory(
         Function<RelDataTypeFactory, Prepare.CatalogReader> factory);
 
@@ -444,6 +448,7 @@ public abstract class SqlToRelTestBase {
     private final Function<RelDataTypeFactory, Prepare.CatalogReader>
     catalogReaderFactory;
     private RelDataTypeFactory typeFactory;
+    public final SqlToRelConverter.Config config;
 
     /**
      * Creates a TesterImpl.
@@ -457,15 +462,26 @@ public abstract class SqlToRelTestBase {
         boolean enableTrim,
         Function<RelDataTypeFactory, Prepare.CatalogReader>
             catalogReaderFactory) {
+      this(diffRepos, enableDecorrelate, enableTrim,
+          catalogReaderFactory, SqlToRelConverter.Config.DEFAULT);
+    }
+
+    protected TesterImpl(DiffRepository diffRepos, boolean enableDecorrelate,
+        boolean enableTrim,
+        Function<RelDataTypeFactory, Prepare.CatalogReader>
+            catalogReaderFactory,
+        SqlToRelConverter.Config config) {
       this.diffRepos = diffRepos;
       this.enableDecorrelate = enableDecorrelate;
       this.enableTrim = enableTrim;
       this.catalogReaderFactory = catalogReaderFactory;
+      this.config = config;
     }
 
     public RelNode convertSqlToRel(String sql) {
       Util.pre(sql != null, "sql != null");
       final SqlNode sqlQuery;
+      final SqlToRelConverter.Config localConfig;
       try {
         sqlQuery = parseQuery(sql);
       } catch (Exception e) {
@@ -477,12 +493,20 @@ public abstract class SqlToRelTestBase {
       final SqlValidator validator =
           createValidator(
               catalogReader, typeFactory);
+      if (config == SqlToRelConverter.Config.DEFAULT) {
+        localConfig = SqlToRelConverter.configBuilder()
+            .withTrimUnusedFields(true).build();
+      } else {
+        localConfig = config;
+      }
+
       final SqlToRelConverter converter =
           createSqlToRelConverter(
               validator,
               catalogReader,
-              typeFactory);
-      converter.setTrimUnusedFields(true);
+              typeFactory,
+              localConfig);
+
       final SqlNode validatedQuery = validator.validate(sqlQuery);
       RelNode rel =
           converter.convertQuery(validatedQuery, false, true);
@@ -494,7 +518,6 @@ public abstract class SqlToRelTestBase {
         rel = converter.decorrelate(sqlQuery, rel);
       }
       if (enableTrim) {
-        converter.setTrimUnusedFields(true);
         rel = converter.trimUnusedFields(rel);
       }
       return rel;
@@ -503,12 +526,13 @@ public abstract class SqlToRelTestBase {
     protected SqlToRelConverter createSqlToRelConverter(
         final SqlValidator validator,
         final Prepare.CatalogReader catalogReader,
-        final RelDataTypeFactory typeFactory) {
+        final RelDataTypeFactory typeFactory,
+        final SqlToRelConverter.Config config) {
       final RexBuilder rexBuilder = new RexBuilder(typeFactory);
       final RelOptCluster cluster =
           RelOptCluster.create(getPlanner(), rexBuilder);
       return new SqlToRelConverter(null, validator, catalogReader, cluster,
-          StandardConvertletTable.INSTANCE);
+          StandardConvertletTable.INSTANCE, config);
     }
 
     protected final RelDataTypeFactory getTypeFactory() {
@@ -645,6 +669,13 @@ public abstract class SqlToRelTestBase {
     public TesterImpl withDecorrelation(boolean enable) {
       return this.enableDecorrelate == enable ? this
           : new TesterImpl(diffRepos, enable, enableTrim, catalogReaderFactory);
+    }
+
+    public TesterImpl withConfig(SqlToRelConverter.Config config) {
+      return this.config == config
+          ? this
+          : new TesterImpl(diffRepos, enableDecorrelate, enableTrim,
+              catalogReaderFactory, config);
     }
 
     public Tester withTrim(boolean enable) {
