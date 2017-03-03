@@ -47,6 +47,8 @@ import org.apache.calcite.rel.metadata.CachingRelMetadataProvider;
 import org.apache.calcite.rel.metadata.ChainedRelMetadataProvider;
 import org.apache.calcite.rel.metadata.DefaultRelMetadataProvider;
 import org.apache.calcite.rel.metadata.Metadata;
+import org.apache.calcite.rel.metadata.MetadataDef;
+import org.apache.calcite.rel.metadata.MetadataHandler;
 import org.apache.calcite.rel.metadata.ReflectiveRelMetadataProvider;
 import org.apache.calcite.rel.metadata.RelColumnOrigin;
 import org.apache.calcite.rel.metadata.RelMdCollation;
@@ -127,9 +129,8 @@ public class RelMetadataTest extends SqlToRelTestBase {
   // ----------------------------------------------------------------------
 
   private RelNode convertSql(String sql) {
-    RelNode rel = tester.convertSqlToRel(sql);
-    DefaultRelMetadataProvider provider = new DefaultRelMetadataProvider();
-    rel.getCluster().setMetadataProvider(provider);
+    final RelNode rel = tester.convertSqlToRel(sql);
+    rel.getCluster().setMetadataProvider(DefaultRelMetadataProvider.INSTANCE);
     return rel;
   }
 
@@ -1102,7 +1103,7 @@ public class RelMetadataTest extends SqlToRelTestBase {
 
   /** A provider for {@link org.apache.calcite.test.RelMetadataTest.ColType} via
    * reflection. */
-  public static class ColTypeImpl {
+  public static class ColTypeImpl implements MetadataHandler {
     static final ThreadLocal<List<String>> THREAD_LIST = new ThreadLocal<>();
     static final Method METHOD;
     static {
@@ -1116,6 +1117,10 @@ public class RelMetadataTest extends SqlToRelTestBase {
     public static final RelMetadataProvider SOURCE =
         ReflectiveRelMetadataProvider.reflectiveSource(
             METHOD, new ColTypeImpl());
+
+    public MetadataDef getDef() {
+      throw new UnsupportedOperationException();
+    }
 
     /** Implementation of {@link ColType#getColType(int)} for
      * {@link org.apache.calcite.rel.logical.LogicalAggregate}, called via

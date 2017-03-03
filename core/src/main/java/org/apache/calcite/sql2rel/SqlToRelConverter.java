@@ -53,7 +53,9 @@ import org.apache.calcite.rel.logical.LogicalTableModify;
 import org.apache.calcite.rel.logical.LogicalTableScan;
 import org.apache.calcite.rel.logical.LogicalUnion;
 import org.apache.calcite.rel.logical.LogicalValues;
+import org.apache.calcite.rel.metadata.JaninoRelMetadataProvider;
 import org.apache.calcite.rel.metadata.RelColumnMapping;
+import org.apache.calcite.rel.metadata.RelMetadataQuery;
 import org.apache.calcite.rel.stream.LogicalDelta;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
@@ -515,6 +517,8 @@ public class SqlToRelConverter {
       query = validator.validate(query);
     }
 
+    RelMetadataQuery.THREAD_PROVIDERS.set(
+        JaninoRelMetadataProvider.of(cluster.getMetadataProvider()));
     RelNode result = convertQueryRecursive(query, top, null);
     if (top && isStream(query)) {
       result = new LogicalDelta(cluster, result.getTraitSet(), result);

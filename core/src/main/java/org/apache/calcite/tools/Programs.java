@@ -29,6 +29,7 @@ import org.apache.calcite.plan.hep.HepProgram;
 import org.apache.calcite.plan.hep.HepProgramBuilder;
 import org.apache.calcite.prepare.CalcitePrepareImpl;
 import org.apache.calcite.rel.RelNode;
+import org.apache.calcite.rel.core.Calc;
 import org.apache.calcite.rel.metadata.ChainedRelMetadataProvider;
 import org.apache.calcite.rel.metadata.DefaultRelMetadataProvider;
 import org.apache.calcite.rel.metadata.RelMetadataProvider;
@@ -94,9 +95,9 @@ public class Programs {
           FilterCalcMergeRule.INSTANCE,
           ProjectCalcMergeRule.INSTANCE);
 
-  /** Program that converts filters and projects to calcs. */
+  /** Program that converts filters and projects to {@link Calc}s. */
   public static final Program CALC_PROGRAM =
-      hep(CALC_RULES, true, new DefaultRelMetadataProvider());
+      hep(CALC_RULES, true, DefaultRelMetadataProvider.INSTANCE);
 
   public static final ImmutableSet<RelOptRule> RULE_SET =
       ImmutableSet.of(
@@ -222,7 +223,7 @@ public class Programs {
               .addRuleInstance(JoinToMultiJoinRule.INSTANCE)
               .build();
           final Program program1 =
-              of(hep, false, new DefaultRelMetadataProvider());
+              of(hep, false, DefaultRelMetadataProvider.INSTANCE);
 
           // Create a program that contains a rule to expand a MultiJoin
           // into heuristically ordered joins.
@@ -257,6 +258,12 @@ public class Programs {
 
   /** Returns the standard program used by Prepare. */
   public static Program standard() {
+    return standard(DefaultRelMetadataProvider.INSTANCE);
+  }
+
+  /** Returns the standard program with user metadata provider. */
+  public static Program standard(RelMetadataProvider metadataProvider) {
+
     final Program program1 =
         new Program() {
           public RelNode run(RelOptPlanner planner, RelNode rel,

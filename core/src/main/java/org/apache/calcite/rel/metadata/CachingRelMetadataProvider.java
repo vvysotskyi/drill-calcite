@@ -19,7 +19,6 @@ package org.apache.calcite.rel.metadata;
 import org.apache.calcite.plan.RelOptPlanner;
 import org.apache.calcite.rel.RelNode;
 
-import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableList;
@@ -64,23 +63,31 @@ public class CachingRelMetadataProvider implements RelMetadataProvider {
 
   //~ Methods ----------------------------------------------------------------
 
-  public Function<RelNode, Metadata> apply(Class<? extends RelNode> relClass,
-      final Class<? extends Metadata> metadataClass) {
-    final Function<RelNode, Metadata> function =
-        underlyingProvider.apply(relClass, metadataClass);
+  public <M extends Metadata> UnboundMetadata<M>
+  apply(Class<? extends RelNode> relClass,
+        final Class<? extends M> metadataClass) {
+    final UnboundMetadata<M> function =
+      underlyingProvider.apply(relClass, metadataClass);
     if (function == null) {
       return null;
     }
 
     // TODO jvs 30-Mar-2006: Use meta-metadata to decide which metadata
     // query results can stay fresh until the next Ice Age.
-    return new Function<RelNode, Metadata>() {
-      public Metadata apply(RelNode input) {
-        final Metadata metadata = function.apply(input);
-        return (Metadata) Proxy.newProxyInstance(metadataClass.getClassLoader(),
-            new Class[]{metadataClass}, new CachingInvocationHandler(metadata));
+    return new UnboundMetadata<M>() {
+      public M bind(RelNode rel, RelMetadataQuery mq) {
+        final Metadata metadata = function.bind(rel, mq);
+        return metadataClass.cast(
+          Proxy.newProxyInstance(metadataClass.getClassLoader(),
+            new Class[]{metadataClass},
+            new CachingInvocationHandler(metadata)));
       }
     };
+  }
+
+  public <M extends Metadata> Map<Method, MetadataHandler<M>>
+  handlers(MetadataDef<M> def) {
+    return underlyingProvider.handlers(def);
   }
 
   //~ Inner Classes ----------------------------------------------------------

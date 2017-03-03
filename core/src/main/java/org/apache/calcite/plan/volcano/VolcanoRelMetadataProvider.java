@@ -18,9 +18,16 @@ package org.apache.calcite.plan.volcano;
 
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.metadata.Metadata;
+import org.apache.calcite.rel.metadata.MetadataDef;
+import org.apache.calcite.rel.metadata.MetadataHandler;
 import org.apache.calcite.rel.metadata.RelMetadataProvider;
+import org.apache.calcite.rel.metadata.RelMetadataQuery;
+import org.apache.calcite.rel.metadata.UnboundMetadata;
 
-import com.google.common.base.Function;
+import com.google.common.collect.ImmutableMap;
+
+import java.lang.reflect.Method;
+import java.util.Map;
 
 /**
  * VolcanoRelMetadataProvider implements the {@link RelMetadataProvider}
@@ -29,16 +36,27 @@ import com.google.common.base.Function;
 public class VolcanoRelMetadataProvider implements RelMetadataProvider {
   //~ Methods ----------------------------------------------------------------
 
-  public Function<RelNode, Metadata> apply(Class<? extends RelNode> relClass,
-      final Class<? extends Metadata> metadataClass) {
+  @Override public boolean equals(Object obj) {
+    return obj instanceof VolcanoRelMetadataProvider;
+  }
+
+  @Override public int hashCode() {
+    return 103;
+  }
+
+  public <M extends Metadata> UnboundMetadata<M>
+  apply(Class<? extends RelNode> relClass,
+      final Class<? extends M> metadataClass) {
     if (relClass != RelSubset.class) {
       // let someone else further down the chain sort it out
       return null;
     }
 
-    return new Function<RelNode, Metadata>() {
-      public Metadata apply(RelNode rel) {
-        RelSubset subset = (RelSubset) rel;
+    return new UnboundMetadata<M>() {
+      public M bind(RelNode rel, RelMetadataQuery mq) {
+        final RelSubset subset = (RelSubset) rel;
+        final RelMetadataProvider provider =
+          rel.getCluster().getMetadataProvider();
 
         // REVIEW jvs 29-Mar-2006: I'm not sure what the correct precedence
         // should be here.  Letting the current best plan take the first shot is
@@ -49,11 +67,10 @@ public class VolcanoRelMetadataProvider implements RelMetadataProvider {
         // First, try current best implementation.  If it knows how to answer
         // this query, treat it as the most reliable.
         if (subset.best != null) {
-          final Function<RelNode, Metadata> function =
-              rel.getCluster().getMetadataProvider().apply(
-                  subset.best.getClass(), metadataClass);
+          final UnboundMetadata<M> function =
+              provider.apply(subset.best.getClass(), metadataClass);
           if (function != null) {
-            Metadata metadata = function.apply(subset.best);
+            final M metadata = function.bind(subset.best, mq);
             if (metadata != null) {
               return metadata;
             }
@@ -79,11 +96,10 @@ public class VolcanoRelMetadataProvider implements RelMetadataProvider {
         subset.set.inMetadataQuery = true;
         try {
           for (RelNode relCandidate : subset.set.rels) {
-            final Function<RelNode, Metadata> function =
-                rel.getCluster().getMetadataProvider().apply(
-                    relCandidate.getClass(), metadataClass);
+            final UnboundMetadata<M> function =
+                provider.apply(relCandidate.getClass(), metadataClass);
             if (function != null) {
-              final Metadata result = function.apply(relCandidate);
+              final M result = function.bind(relCandidate, mq);
               if (result != null) {
                 return result;
               }
@@ -97,6 +113,11 @@ public class VolcanoRelMetadataProvider implements RelMetadataProvider {
         return null;
       }
     };
+  }
+
+  public <M extends Metadata> Map<Method, MetadataHandler<M>>
+  handlers(MetadataDef<M> def) {
+    return ImmutableMap.of();
   }
 }
 

@@ -18,14 +18,16 @@ package org.apache.calcite.rel.metadata;
 
 import org.apache.calcite.rel.RelNode;
 
-import com.google.common.base.Function;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Implementation of the {@link RelMetadataProvider}
@@ -53,11 +55,22 @@ public class ChainedRelMetadataProvider implements RelMetadataProvider {
 
   //~ Methods ----------------------------------------------------------------
 
-  public Function<RelNode, Metadata> apply(Class<? extends RelNode> relClass,
-      final Class<? extends Metadata> metadataClass) {
-    final List<Function<RelNode, Metadata>> functions = Lists.newArrayList();
+  @Override public boolean equals(Object obj) {
+    return obj == this
+        || obj instanceof ChainedRelMetadataProvider
+        && providers.equals(((ChainedRelMetadataProvider) obj).providers);
+  }
+
+  @Override public int hashCode() {
+    return providers.hashCode();
+  }
+
+  public <M extends Metadata> UnboundMetadata<M>
+  apply(Class<? extends RelNode> relClass,
+      final Class<? extends M> metadataClass) {
+    final List<UnboundMetadata<M>> functions = new ArrayList<>();
     for (RelMetadataProvider provider : providers) {
-      final Function<RelNode, Metadata> function =
+      final UnboundMetadata<M> function =
           provider.apply(relClass, metadataClass);
       if (function == null) {
         continue;
@@ -70,23 +83,32 @@ public class ChainedRelMetadataProvider implements RelMetadataProvider {
     case 1:
       return functions.get(0);
     default:
-      return new Function<RelNode, Metadata>() {
-        public Metadata apply(RelNode input) {
+      return new UnboundMetadata<M>() {
+        public M bind(RelNode rel, RelMetadataQuery mq) {
           final List<Metadata> metadataList = Lists.newArrayList();
-          for (Function<RelNode, Metadata> function : functions) {
-            final Metadata metadata = function.apply(input);
+          for (UnboundMetadata<M> function : functions) {
+            final Metadata metadata = function.bind(rel, mq);
             if (metadata != null) {
               metadataList.add(metadata);
             }
           }
-          return (Metadata) Proxy.newProxyInstance(
-              metadataClass.getClassLoader(),
-              new Class[]{metadataClass},
-              new ChainedInvocationHandler(metadataList));
+          return metadataClass.cast(
+              Proxy.newProxyInstance(metadataClass.getClassLoader(),
+                  new Class[]{metadataClass},
+                  new ChainedInvocationHandler(metadataList)));
         }
       };
-
     }
+  }
+
+  public <M extends Metadata> Map<Method, MetadataHandler<M>>
+  handlers(MetadataDef<M> def) {
+    final ImmutableMap.Builder<Method, MetadataHandler<M>> builder =
+        ImmutableMap.builder();
+    for (RelMetadataProvider provider : providers.reverse()) {
+      builder.putAll(provider.handlers(def));
+    }
+    return builder.build();
   }
 
   /** Creates a chain. */
