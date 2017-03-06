@@ -44,6 +44,7 @@ import org.apache.calcite.rel.logical.LogicalJoin;
 import org.apache.calcite.rel.logical.LogicalProject;
 import org.apache.calcite.rel.logical.LogicalSort;
 import org.apache.calcite.rel.metadata.RelMdUtil;
+import org.apache.calcite.rel.metadata.RelMetadataQuery;
 import org.apache.calcite.rel.rules.FilterCorrelateRule;
 import org.apache.calcite.rel.rules.FilterJoinRule;
 import org.apache.calcite.rel.rules.FilterProjectTransposeRule;
@@ -1903,8 +1904,8 @@ public class RelDecorrelator implements ReflectiveVisitor {
 
         // The join filters out the nulls.  So, it's ok if there are
         // nulls in the join keys.
-        if (!RelMdUtil.areColumnsDefinitelyUniqueWhenNullsFiltered(
-            rightInputRel,
+        final RelMetadataQuery mq = RelMetadataQuery.instance();
+        if (!RelMdUtil.areColumnsDefinitelyUniqueWhenNullsFiltered(mq, rightInputRel,
             rightJoinKeys)) {
           SQL2REL_LOGGER.fine(rightJoinKeys.toString()
               + "are not unique keys for "
@@ -2118,8 +2119,8 @@ public class RelDecorrelator implements ReflectiveVisitor {
 
         // The join filters out the nulls.  So, it's ok if there are
         // nulls in the join keys.
-        if (!RelMdUtil.areColumnsDefinitelyUniqueWhenNullsFiltered(
-            leftInputRel,
+        final RelMetadataQuery mq = RelMetadataQuery.instance();
+        if (!RelMdUtil.areColumnsDefinitelyUniqueWhenNullsFiltered(mq, leftInputRel,
             correlatedInputRefJoinKeys)) {
           SQL2REL_LOGGER.fine(correlatedJoinKeys.toString()
               + "are not unique keys for "
@@ -2197,9 +2198,8 @@ public class RelDecorrelator implements ReflectiveVisitor {
         // leftInputRel contains unique keys
         // i.e. each row is distinct and can group by on all the left
         // fields
-        if (!RelMdUtil.areColumnsDefinitelyUnique(
-            leftInputRel,
-            allCols)) {
+        final RelMetadataQuery mq = RelMetadataQuery.instance();
+        if (!RelMdUtil.areColumnsDefinitelyUnique(mq, leftInputRel, allCols)) {
           SQL2REL_LOGGER.fine("There are no unique keys for " + leftInputRel);
           return;
         }

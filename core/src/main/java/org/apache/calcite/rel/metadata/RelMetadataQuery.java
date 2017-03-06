@@ -26,11 +26,17 @@ import org.apache.calcite.rex.RexNode;
 import org.apache.calcite.sql.SqlExplainLevel;
 import org.apache.calcite.util.ImmutableBitSet;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 
+import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.Method;
+import java.lang.reflect.Proxy;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -64,12 +70,113 @@ import java.util.Set;
  * custom providers for the standard queries in order to handle additional
  * relational expressions (either logical or physical). In either case, the
  * process is the same: write a reflective provider and chain it on to an
- * instance of {@link DefaultRelMetadataProvider}, prepending it to the default
+ * instance of {@link DefaultRelMetadataProvider}, pre-pending it to the default
  * providers. Then supply that instance to the planner via the appropriate
  * plugin mechanism.
  */
-public abstract class RelMetadataQuery {
+public class RelMetadataQuery {
+  /** Set of active metadata queries, and cache of previous results. */
+  public final Map<List, Object> map = new HashMap<>();
+
+  public final JaninoRelMetadataProvider metadataProvider;
+
+  private static final RelMetadataQuery EMPTY = new RelMetadataQuery(false);
+
+  private BuiltInMetadata.Collation.Handler collationHandler;
+  private BuiltInMetadata.ColumnOrigin.Handler columnOriginHandler;
+  private BuiltInMetadata.ColumnUniqueness.Handler columnUniquenessHandler;
+  private BuiltInMetadata.CumulativeCost.Handler cumulativeCostHandler;
+  private BuiltInMetadata.DistinctRowCount.Handler distinctRowCountHandler;
+  private BuiltInMetadata.Distribution.Handler distributionHandler;
+  private BuiltInMetadata.ExplainVisibility.Handler explainVisibilityHandler;
+  private BuiltInMetadata.MaxRowCount.Handler maxRowCountHandler;
+  private BuiltInMetadata.Memory.Handler memoryHandler;
+  private BuiltInMetadata.NonCumulativeCost.Handler nonCumulativeCostHandler;
+  private BuiltInMetadata.Parallelism.Handler parallelismHandler;
+  private BuiltInMetadata.PercentageOriginalRows.Handler percentageOriginalRowsHandler;
+  private BuiltInMetadata.PopulationSize.Handler populationSizeHandler;
+  private BuiltInMetadata.Predicates.Handler predicatesHandler;
+  private BuiltInMetadata.RowCount.Handler rowCountHandler;
+  private BuiltInMetadata.Selectivity.Handler selectivityHandler;
+  private BuiltInMetadata.Size.Handler sizeHandler;
+  private BuiltInMetadata.UniqueKeys.Handler uniqueKeysHandler;
+
+  public static final ThreadLocal<JaninoRelMetadataProvider> THREAD_PROVIDERS =
+    new ThreadLocal<JaninoRelMetadataProvider>() {
+      protected JaninoRelMetadataProvider initialValue() {
+        return JaninoRelMetadataProvider.DEFAULT;
+      }
+    };
+
+  private RelMetadataQuery(JaninoRelMetadataProvider metadataProvider,
+                           RelMetadataQuery prototype) {
+    this.metadataProvider = Preconditions.checkNotNull(metadataProvider);
+    this.collationHandler = prototype.collationHandler;
+    this.columnOriginHandler = prototype.columnOriginHandler;
+    this.columnUniquenessHandler = prototype.columnUniquenessHandler;
+    this.cumulativeCostHandler = prototype.cumulativeCostHandler;
+    this.distinctRowCountHandler = prototype.distinctRowCountHandler;
+    this.distributionHandler = prototype.distributionHandler;
+    this.explainVisibilityHandler = prototype.explainVisibilityHandler;
+    this.maxRowCountHandler = prototype.maxRowCountHandler;
+    this.memoryHandler = prototype.memoryHandler;
+    this.nonCumulativeCostHandler = prototype.nonCumulativeCostHandler;
+    this.parallelismHandler = prototype.parallelismHandler;
+    this.percentageOriginalRowsHandler = prototype.percentageOriginalRowsHandler;
+    this.populationSizeHandler = prototype.populationSizeHandler;
+    this.predicatesHandler = prototype.predicatesHandler;
+    this.rowCountHandler = prototype.rowCountHandler;
+    this.selectivityHandler = prototype.selectivityHandler;
+    this.sizeHandler = prototype.sizeHandler;
+    this.uniqueKeysHandler = prototype.uniqueKeysHandler;
+  }
+
+  private static <H> H initialHandler(Class<H> handlerClass) {
+    return handlerClass.cast(
+      Proxy.newProxyInstance(RelMetadataQuery.class.getClassLoader(),
+        new Class[] {handlerClass},
+        new InvocationHandler() {
+          public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+            final RelNode r = (RelNode) args[0];
+            throw new JaninoRelMetadataProvider.NoHandler(r.getClass());
+          }
+        }));
+  }
+
   //~ Methods ----------------------------------------------------------------
+
+  /**
+   * Returns an instance of RelMetadataQuery. It ensures that cycles do not
+   * occur while computing metadata.
+   */
+  public static RelMetadataQuery instance() {
+    return new RelMetadataQuery(THREAD_PROVIDERS.get(), EMPTY);
+  }
+
+  /** Creates and initializes the instance that will serve as a prototype for
+   * all other instances. */
+  private RelMetadataQuery(boolean dummy) {
+    this.metadataProvider = null;
+    this.collationHandler = initialHandler(BuiltInMetadata.Collation.Handler.class);
+    this.columnOriginHandler = initialHandler(BuiltInMetadata.ColumnOrigin.Handler.class);
+    this.columnUniquenessHandler = initialHandler(BuiltInMetadata.ColumnUniqueness.Handler.class);
+    this.cumulativeCostHandler = initialHandler(BuiltInMetadata.CumulativeCost.Handler.class);
+    this.distinctRowCountHandler = initialHandler(BuiltInMetadata.DistinctRowCount.Handler.class);
+    this.distributionHandler = initialHandler(BuiltInMetadata.Distribution.Handler.class);
+    this.explainVisibilityHandler = initialHandler(BuiltInMetadata.ExplainVisibility.Handler.class);
+    this.maxRowCountHandler = initialHandler(BuiltInMetadata.MaxRowCount.Handler.class);
+    this.memoryHandler = initialHandler(BuiltInMetadata.Memory.Handler.class);
+    this.nonCumulativeCostHandler = initialHandler(BuiltInMetadata.NonCumulativeCost.Handler.class);
+    this.parallelismHandler = initialHandler(BuiltInMetadata.Parallelism.Handler.class);
+    this.percentageOriginalRowsHandler =
+      initialHandler(BuiltInMetadata.PercentageOriginalRows.Handler.class);
+    this.populationSizeHandler = initialHandler(BuiltInMetadata.PopulationSize.Handler.class);
+    this.predicatesHandler = initialHandler(BuiltInMetadata.Predicates.Handler.class);
+    this.rowCountHandler = initialHandler(BuiltInMetadata.RowCount.Handler.class);
+    this.selectivityHandler = initialHandler(BuiltInMetadata.Selectivity.Handler.class);
+    this.sizeHandler = initialHandler(BuiltInMetadata.Size.Handler.class);
+    this.uniqueKeysHandler = initialHandler(BuiltInMetadata.UniqueKeys.Handler.class);
+  }
 
   /**
    * Returns the
@@ -80,25 +187,35 @@ public abstract class RelMetadataQuery {
    * @return estimated row count, or null if no reliable estimate can be
    * determined
    */
-  public static Double getRowCount(RelNode rel) {
-    final BuiltInMetadata.RowCount metadata =
-        rel.metadata(BuiltInMetadata.RowCount.class);
-    Double result = metadata.getRowCount();
-    return validateResult(result);
+  public Double getRowCount(RelNode rel) {
+    for (;;) {
+      try {
+        Double result = rowCountHandler.getRowCount(rel, this);
+        return validateResult(result);
+      } catch (JaninoRelMetadataProvider.NoHandler e) {
+        rowCountHandler = metadataProvider.revise(e.relClass,
+          BuiltInMetadata.RowCount.DEF);
+      }
+    }
   }
 
   /**
    * Returns the
-   * {@link BuiltInMetadata.RowCount#getRowCount()}
+   * {@link BuiltInMetadata.MaxRowCount#getMaxRowCount()}
    * statistic.
    *
    * @param rel the relational expression
    * @return max row count
    */
-  public static Double getMaxRowCount(RelNode rel) {
-    final BuiltInMetadata.MaxRowCount metadata =
-            rel.metadata(BuiltInMetadata.MaxRowCount.class);
-    return metadata.getMaxRowCount();
+  public Double getMaxRowCount(RelNode rel) {
+    for (;;) {
+      try {
+        return maxRowCountHandler.getMaxRowCount(rel, this);
+      } catch (JaninoRelMetadataProvider.NoHandler e) {
+        maxRowCountHandler = metadataProvider.revise(e.relClass,
+          BuiltInMetadata.MaxRowCount.DEF);
+      }
+    }
   }
 
   /**
@@ -109,10 +226,15 @@ public abstract class RelMetadataQuery {
    * @param rel the relational expression
    * @return estimated cost, or null if no reliable estimate can be determined
    */
-  public static RelOptCost getCumulativeCost(RelNode rel) {
-    final BuiltInMetadata.CumulativeCost metadata =
-        rel.metadata(BuiltInMetadata.CumulativeCost.class);
-    return metadata.getCumulativeCost();
+  public RelOptCost getCumulativeCost(RelNode rel) {
+    for (;;) {
+      try {
+        return cumulativeCostHandler.getCumulativeCost(rel, this);
+      } catch (JaninoRelMetadataProvider.NoHandler e) {
+        cumulativeCostHandler = metadataProvider.revise(e.relClass,
+          BuiltInMetadata.CumulativeCost.DEF);
+      }
+    }
   }
 
   /**
@@ -123,10 +245,15 @@ public abstract class RelMetadataQuery {
    * @param rel the relational expression
    * @return estimated cost, or null if no reliable estimate can be determined
    */
-  public static RelOptCost getNonCumulativeCost(RelNode rel) {
-    final BuiltInMetadata.NonCumulativeCost metadata =
-        rel.metadata(BuiltInMetadata.NonCumulativeCost.class);
-    return metadata.getNonCumulativeCost();
+  public RelOptCost getNonCumulativeCost(RelNode rel) {
+    for (;;) {
+      try {
+        return nonCumulativeCostHandler.getNonCumulativeCost(rel, this);
+      } catch (JaninoRelMetadataProvider.NoHandler e) {
+        nonCumulativeCostHandler = metadataProvider.revise(e.relClass,
+          BuiltInMetadata.NonCumulativeCost.DEF);
+      }
+    }
   }
 
   /**
@@ -138,12 +265,17 @@ public abstract class RelMetadataQuery {
    * @return estimated percentage (between 0.0 and 1.0), or null if no
    * reliable estimate can be determined
    */
-  public static Double getPercentageOriginalRows(RelNode rel) {
-    final BuiltInMetadata.PercentageOriginalRows metadata =
-        rel.metadata(BuiltInMetadata.PercentageOriginalRows.class);
-    Double result = metadata.getPercentageOriginalRows();
-    assert isPercentage(result, true);
-    return result;
+  public Double getPercentageOriginalRows(RelNode rel) {
+    for (;;) {
+      try {
+        Double result =
+          percentageOriginalRowsHandler.getPercentageOriginalRows(rel, this);
+        return validatePercentage(result);
+      } catch (JaninoRelMetadataProvider.NoHandler e) {
+        percentageOriginalRowsHandler = metadataProvider.revise(e.relClass,
+          BuiltInMetadata.PercentageOriginalRows.DEF);
+      }
+    }
   }
 
   /**
@@ -157,10 +289,15 @@ public abstract class RelMetadataQuery {
    * determined (whereas empty set indicates definitely no origin columns at
    * all)
    */
-  public static Set<RelColumnOrigin> getColumnOrigins(RelNode rel, int column) {
-    final BuiltInMetadata.ColumnOrigin metadata =
-        rel.metadata(BuiltInMetadata.ColumnOrigin.class);
-    return metadata.getColumnOrigins(column);
+  public Set<RelColumnOrigin> getColumnOrigins(RelNode rel, int column) {
+    for (;;) {
+      try {
+        return columnOriginHandler.getColumnOrigins(rel, this, column);
+      } catch (JaninoRelMetadataProvider.NoHandler e) {
+        columnOriginHandler = metadataProvider.revise(e.relClass,
+          BuiltInMetadata.ColumnOrigin.DEF);
+      }
+    }
   }
 
   /**
@@ -176,7 +313,7 @@ public abstract class RelMetadataQuery {
    * @return the origin of a column provided it's a simple column; otherwise,
    * returns null
    */
-  public static RelColumnOrigin getColumnOrigin(RelNode rel, int column) {
+  public RelColumnOrigin getColumnOrigin(RelNode rel, int column) {
     final Set<RelColumnOrigin> origins = getColumnOrigins(rel, column);
     if (origins == null || origins.size() != 1) {
       return null;
@@ -193,12 +330,11 @@ public abstract class RelMetadataQuery {
    *
    * @return the table, if the RelNode is a simple table; otherwise null
    */
-  public static RelOptTable getTableOrigin(RelNode rel) {
+  public RelOptTable getTableOrigin(RelNode rel) {
     // Determine the simple origin of the first column in the
     // RelNode.  If it's simple, then that means that the underlying
     // table is also simple, even if the column itself is derived.
-    final Set<RelColumnOrigin> colOrigins =
-        getColumnOrigins(rel, 0);
+    final Set<RelColumnOrigin> colOrigins = getColumnOrigins(rel, 0);
     if (colOrigins == null || colOrigins.size() == 0) {
       return null;
     }
@@ -212,16 +348,20 @@ public abstract class RelMetadataQuery {
    *
    * @param rel       the relational expression
    * @param predicate predicate whose selectivity is to be estimated against
-   *                  rel's output
+   *                  {@code rel}'s output
    * @return estimated selectivity (between 0.0 and 1.0), or null if no
    * reliable estimate can be determined
    */
-  public static Double getSelectivity(RelNode rel, RexNode predicate) {
-    final BuiltInMetadata.Selectivity metadata =
-        rel.metadata(BuiltInMetadata.Selectivity.class);
-    Double result = metadata.getSelectivity(predicate);
-    assert isPercentage(result, true);
-    return result;
+  public Double getSelectivity(RelNode rel, RexNode predicate) {
+    for (;;) {
+      try {
+        Double result = selectivityHandler.getSelectivity(rel, this, predicate);
+        return validatePercentage(result);
+      } catch (JaninoRelMetadataProvider.NoHandler e) {
+        selectivityHandler = metadataProvider.revise(e.relClass,
+          BuiltInMetadata.Selectivity.DEF);
+      }
+    }
   }
 
   /**
@@ -233,10 +373,8 @@ public abstract class RelMetadataQuery {
    * @return set of keys, or null if this information cannot be determined
    * (whereas empty set indicates definitely no keys at all)
    */
-  public static Set<ImmutableBitSet> getUniqueKeys(RelNode rel) {
-    final BuiltInMetadata.UniqueKeys metadata =
-        rel.metadata(BuiltInMetadata.UniqueKeys.class);
-    return metadata.getUniqueKeys(false);
+  public Set<ImmutableBitSet> getUniqueKeys(RelNode rel) {
+    return getUniqueKeys(rel, false);
   }
 
   /**
@@ -247,36 +385,58 @@ public abstract class RelMetadataQuery {
    * @param rel         the relational expression
    * @param ignoreNulls if true, ignore null values when determining
    *                    whether the keys are unique
+   *
    * @return set of keys, or null if this information cannot be determined
    * (whereas empty set indicates definitely no keys at all)
    */
-  public static Set<ImmutableBitSet> getUniqueKeys(RelNode rel,
-      boolean ignoreNulls) {
-    final BuiltInMetadata.UniqueKeys metadata =
-        rel.metadata(BuiltInMetadata.UniqueKeys.class);
-    return metadata.getUniqueKeys(ignoreNulls);
+  public Set<ImmutableBitSet> getUniqueKeys(RelNode rel,
+                                            boolean ignoreNulls) {
+    for (;;) {
+      try {
+        return uniqueKeysHandler.getUniqueKeys(rel, this, ignoreNulls);
+      } catch (JaninoRelMetadataProvider.NoHandler e) {
+        uniqueKeysHandler = metadataProvider.revise(e.relClass,
+          BuiltInMetadata.UniqueKeys.DEF);
+      }
+    }
+  }
+
+  /**
+   * Returns whether the rows of a given relational expression are distinct.
+   * This is derived by applying the
+   * {@link BuiltInMetadata.ColumnUniqueness#areColumnsUnique(org.apache.calcite.util.ImmutableBitSet, boolean)}
+   * statistic over all columns.
+   *
+   * @param rel     the relational expression
+   *
+   * @return true or false depending on whether the rows are unique, or
+   * null if not enough information is available to make that determination
+   */
+  public Boolean areRowsUnique(RelNode rel) {
+    final ImmutableBitSet columns =
+      ImmutableBitSet.range(rel.getRowType().getFieldCount());
+    return areColumnsUnique(rel, columns, false);
   }
 
   /**
    * Returns the
-   * {@link BuiltInMetadata.ColumnUniqueness#areColumnsUnique(org.apache.calcite.util.ImmutableBitSet, boolean)}
+   * {@link BuiltInMetadata.ColumnUniqueness#areColumnsUnique(ImmutableBitSet, boolean)}
    * statistic.
    *
    * @param rel     the relational expression
    * @param columns column mask representing the subset of columns for which
    *                uniqueness will be determined
+   *
    * @return true or false depending on whether the columns are unique, or
    * null if not enough information is available to make that determination
    */
-  public static Boolean areColumnsUnique(RelNode rel, ImmutableBitSet columns) {
-    final BuiltInMetadata.ColumnUniqueness metadata =
-        rel.metadata(BuiltInMetadata.ColumnUniqueness.class);
-    return metadata.areColumnsUnique(columns, false);
+  public Boolean areColumnsUnique(RelNode rel, ImmutableBitSet columns) {
+    return areColumnsUnique(rel, columns, false);
   }
 
   /**
    * Returns the
-   * {@link BuiltInMetadata.ColumnUniqueness#areColumnsUnique(org.apache.calcite.util.ImmutableBitSet, boolean)}
+   * {@link BuiltInMetadata.ColumnUniqueness#areColumnsUnique(ImmutableBitSet, boolean)}
    * statistic.
    *
    * @param rel         the relational expression
@@ -287,46 +447,62 @@ public abstract class RelMetadataQuery {
    * @return true or false depending on whether the columns are unique, or
    * null if not enough information is available to make that determination
    */
-  public static Boolean areColumnsUnique(RelNode rel, ImmutableBitSet columns,
-      boolean ignoreNulls) {
-    final BuiltInMetadata.ColumnUniqueness metadata =
-        rel.metadata(BuiltInMetadata.ColumnUniqueness.class);
-    return metadata.areColumnsUnique(columns, ignoreNulls);
+  public Boolean areColumnsUnique(RelNode rel, ImmutableBitSet columns,
+                                  boolean ignoreNulls) {
+    for (;;) {
+      try {
+        return columnUniquenessHandler.areColumnsUnique(rel, this, columns,
+          ignoreNulls);
+      } catch (JaninoRelMetadataProvider.NoHandler e) {
+        columnUniquenessHandler = metadataProvider.revise(e.relClass,
+          BuiltInMetadata.ColumnUniqueness.DEF);
+      }
+    }
   }
 
   /**
    * Returns the
-   * {@link org.apache.calcite.rel.metadata.BuiltInMetadata.Collation#collations()}
+   * {@link BuiltInMetadata.Collation#collations()}
    * statistic.
    *
    * @param rel         the relational expression
    * @return List of sorted column combinations, or
    * null if not enough information is available to make that determination
    */
-  public static ImmutableList<RelCollation> collations(RelNode rel) {
-    final BuiltInMetadata.Collation metadata =
-        rel.metadata(BuiltInMetadata.Collation.class);
-    return metadata.collations();
+  public ImmutableList<RelCollation> collations(RelNode rel) {
+    for (;;) {
+      try {
+        return collationHandler.collations(rel, this);
+      } catch (JaninoRelMetadataProvider.NoHandler e) {
+        collationHandler = metadataProvider.revise(e.relClass,
+          BuiltInMetadata.Collation.DEF);
+      }
+    }
   }
 
   /**
    * Returns the
-   * {@link org.apache.calcite.rel.metadata.BuiltInMetadata.Distribution#distribution()}
+   * {@link BuiltInMetadata.Distribution#distribution()}
    * statistic.
    *
    * @param rel         the relational expression
    * @return List of sorted column combinations, or
    * null if not enough information is available to make that determination
    */
-  public static RelDistribution distribution(RelNode rel) {
-    final BuiltInMetadata.Distribution metadata =
-        rel.metadata(BuiltInMetadata.Distribution.class);
-    return metadata.distribution();
+  public RelDistribution distribution(RelNode rel) {
+    for (;;) {
+      try {
+        return distributionHandler.distribution(rel, this);
+      } catch (JaninoRelMetadataProvider.NoHandler e) {
+        distributionHandler = metadataProvider.revise(e.relClass,
+          BuiltInMetadata.Distribution.DEF);
+      }
+    }
   }
 
   /**
    * Returns the
-   * {@link BuiltInMetadata.PopulationSize#getPopulationSize(org.apache.calcite.util.ImmutableBitSet)}
+   * {@link BuiltInMetadata.PopulationSize#getPopulationSize(ImmutableBitSet)}
    * statistic.
    *
    * @param rel      the relational expression
@@ -336,31 +512,42 @@ public abstract class RelMetadataQuery {
    * estimate can be determined
    *
    */
-  public static Double getPopulationSize(RelNode rel,
-      ImmutableBitSet groupKey) {
-    final BuiltInMetadata.PopulationSize metadata =
-        rel.metadata(BuiltInMetadata.PopulationSize.class);
-    Double result = metadata.getPopulationSize(groupKey);
-    return validateResult(result);
+  public Double getPopulationSize(RelNode rel,
+                                  ImmutableBitSet groupKey) {
+    for (;;) {
+      try {
+        Double result =
+          populationSizeHandler.getPopulationSize(rel, this, groupKey);
+        return validateResult(result);
+      } catch (JaninoRelMetadataProvider.NoHandler e) {
+        populationSizeHandler = metadataProvider.revise(e.relClass,
+          BuiltInMetadata.PopulationSize.DEF);
+      }
+    }
   }
 
   /**
    * Returns the
-   * {@link org.apache.calcite.rel.metadata.BuiltInMetadata.Size#averageRowSize()}
+   * {@link BuiltInMetadata.Size#averageRowSize()}
    * statistic.
    *
    * @param rel      the relational expression
    * @return average size of a row, in bytes, or null if not known
-     */
-  public static Double getAverageRowSize(RelNode rel) {
-    final BuiltInMetadata.Size metadata =
-        rel.metadata(BuiltInMetadata.Size.class);
-    return metadata.averageRowSize();
+   */
+  public Double getAverageRowSize(RelNode rel) {
+    for (;;) {
+      try {
+        return sizeHandler.averageRowSize(rel, this);
+      } catch (JaninoRelMetadataProvider.NoHandler e) {
+        sizeHandler = metadataProvider.revise(e.relClass,
+          BuiltInMetadata.Size.DEF);
+      }
+    }
   }
 
   /**
    * Returns the
-   * {@link org.apache.calcite.rel.metadata.BuiltInMetadata.Size#averageColumnSizes()}
+   * {@link BuiltInMetadata.Size#averageColumnSizes()}
    * statistic.
    *
    * @param rel      the relational expression
@@ -368,18 +555,21 @@ public abstract class RelMetadataQuery {
    * value, in bytes. Each value or the entire list may be null if the
    * metadata is not available
    */
-  public static List<Double> getAverageColumnSizes(RelNode rel) {
-    final BuiltInMetadata.Size metadata =
-        rel.metadata(BuiltInMetadata.Size.class);
-    return metadata.averageColumnSizes();
+  public List<Double> getAverageColumnSizes(RelNode rel) {
+    for (;;) {
+      try {
+        return sizeHandler.averageColumnSizes(rel, this);
+      } catch (JaninoRelMetadataProvider.NoHandler e) {
+        sizeHandler = metadataProvider.revise(e.relClass,
+          BuiltInMetadata.Size.DEF);
+      }
+    }
   }
 
   /** As {@link #getAverageColumnSizes(org.apache.calcite.rel.RelNode)} but
    * never returns a null list, only ever a list of nulls. */
-  public static List<Double> getAverageColumnSizesNotNull(RelNode rel) {
-    final BuiltInMetadata.Size metadata =
-        rel.metadata(BuiltInMetadata.Size.class);
-    final List<Double> averageColumnSizes = metadata.averageColumnSizes();
+  public List<Double> getAverageColumnSizesNotNull(RelNode rel) {
+    final List<Double> averageColumnSizes = getAverageColumnSizes(rel);
     return averageColumnSizes == null
         ? Collections.<Double>nCopies(rel.getRowType().getFieldCount(), null)
         : averageColumnSizes;
@@ -387,7 +577,7 @@ public abstract class RelMetadataQuery {
 
   /**
    * Returns the
-   * {@link org.apache.calcite.rel.metadata.BuiltInMetadata.Parallelism#isPhaseTransition()}
+   * {@link BuiltInMetadata.Parallelism#isPhaseTransition()}
    * statistic.
    *
    * @param rel      the relational expression
@@ -395,29 +585,39 @@ public abstract class RelMetadataQuery {
    * expression belongs to a different process than its inputs, or null if not
    * known
    */
-  public static Boolean isPhaseTransition(RelNode rel) {
-    final BuiltInMetadata.Parallelism metadata =
-        rel.metadata(BuiltInMetadata.Parallelism.class);
-    return metadata.isPhaseTransition();
+  public Boolean isPhaseTransition(RelNode rel) {
+    for (;;) {
+      try {
+        return parallelismHandler.isPhaseTransition(rel, this);
+      } catch (JaninoRelMetadataProvider.NoHandler e) {
+        parallelismHandler = metadataProvider.revise(e.relClass,
+          BuiltInMetadata.Parallelism.DEF);
+      }
+    }
   }
 
   /**
    * Returns the
-   * {@link org.apache.calcite.rel.metadata.BuiltInMetadata.Parallelism#splitCount()}
+   * {@link BuiltInMetadata.Parallelism#splitCount()}
    * statistic.
    *
    * @param rel      the relational expression
    * @return the number of distinct splits of the data, or null if not known
    */
-  public static Integer splitCount(RelNode rel) {
-    final BuiltInMetadata.Parallelism metadata =
-        rel.metadata(BuiltInMetadata.Parallelism.class);
-    return metadata.splitCount();
+  public Integer splitCount(RelNode rel) {
+    for (;;) {
+      try {
+        return parallelismHandler.splitCount(rel, this);
+      } catch (JaninoRelMetadataProvider.NoHandler e) {
+        parallelismHandler = metadataProvider.revise(e.relClass,
+          BuiltInMetadata.Parallelism.DEF);
+      }
+    }
   }
 
   /**
    * Returns the
-   * {@link org.apache.calcite.rel.metadata.BuiltInMetadata.Memory#memory()}
+   * {@link BuiltInMetadata.Memory#memory()}
    * statistic.
    *
    * @param rel      the relational expression
@@ -425,15 +625,20 @@ public abstract class RelMetadataQuery {
    * operator implementing this relational expression, across all splits,
    * or null if not known
    */
-  public static Double memory(RelNode rel) {
-    final BuiltInMetadata.Memory metadata =
-        rel.metadata(BuiltInMetadata.Memory.class);
-    return metadata.memory();
+  public Double memory(RelNode rel) {
+    for (;;) {
+      try {
+        return memoryHandler.memory(rel, this);
+      } catch (JaninoRelMetadataProvider.NoHandler e) {
+        memoryHandler = metadataProvider.revise(e.relClass,
+          BuiltInMetadata.Memory.DEF);
+      }
+    }
   }
 
   /**
    * Returns the
-   * {@link org.apache.calcite.rel.metadata.BuiltInMetadata.Memory#cumulativeMemoryWithinPhase()}
+   * {@link BuiltInMetadata.Memory#cumulativeMemoryWithinPhase()}
    * statistic.
    *
    * @param rel      the relational expression
@@ -441,15 +646,20 @@ public abstract class RelMetadataQuery {
    * physical operator implementing this relational expression, and all other
    * operators within the same phase, across all splits, or null if not known
    */
-  public static Double cumulativeMemoryWithinPhase(RelNode rel) {
-    final BuiltInMetadata.Memory metadata =
-        rel.metadata(BuiltInMetadata.Memory.class);
-    return metadata.cumulativeMemoryWithinPhase();
+  public Double cumulativeMemoryWithinPhase(RelNode rel) {
+    for (;;) {
+      try {
+        return memoryHandler.cumulativeMemoryWithinPhase(rel, this);
+      } catch (JaninoRelMetadataProvider.NoHandler e) {
+        memoryHandler = metadataProvider.revise(e.relClass,
+          BuiltInMetadata.Memory.DEF);
+      }
+    }
   }
 
   /**
    * Returns the
-   * {@link org.apache.calcite.rel.metadata.BuiltInMetadata.Memory#cumulativeMemoryWithinPhaseSplit()}
+   * {@link BuiltInMetadata.Memory#cumulativeMemoryWithinPhaseSplit()}
    * statistic.
    *
    * @param rel      the relational expression
@@ -457,15 +667,20 @@ public abstract class RelMetadataQuery {
    * the physical operator implementing this relational expression, and all
    * operators within the same phase, within each split, or null if not known
    */
-  public static Double cumulativeMemoryWithinPhaseSplit(RelNode rel) {
-    final BuiltInMetadata.Memory metadata =
-        rel.metadata(BuiltInMetadata.Memory.class);
-    return metadata.cumulativeMemoryWithinPhaseSplit();
+  public Double cumulativeMemoryWithinPhaseSplit(RelNode rel) {
+    for (;;) {
+      try {
+        return memoryHandler.cumulativeMemoryWithinPhaseSplit(rel, this);
+      } catch (JaninoRelMetadataProvider.NoHandler e) {
+        memoryHandler = metadataProvider.revise(e.relClass,
+          BuiltInMetadata.Memory.DEF);
+      }
+    }
   }
 
   /**
    * Returns the
-   * {@link BuiltInMetadata.DistinctRowCount#getDistinctRowCount(org.apache.calcite.util.ImmutableBitSet, org.apache.calcite.rex.RexNode)}
+   * {@link BuiltInMetadata.DistinctRowCount#getDistinctRowCount(ImmutableBitSet, RexNode)}
    * statistic.
    *
    * @param rel       the relational expression
@@ -474,28 +689,40 @@ public abstract class RelMetadataQuery {
    * @return distinct row count for groupKey, filtered by predicate, or null
    * if no reliable estimate can be determined
    */
-  public static Double getDistinctRowCount(
+  public Double getDistinctRowCount(
       RelNode rel,
       ImmutableBitSet groupKey,
       RexNode predicate) {
-    final BuiltInMetadata.DistinctRowCount metadata =
-        rel.metadata(BuiltInMetadata.DistinctRowCount.class);
-    Double result = metadata.getDistinctRowCount(groupKey, predicate);
-    return validateResult(result);
+    for (;;) {
+      try {
+        Double result =
+          distinctRowCountHandler.getDistinctRowCount(rel, this, groupKey,
+            predicate);
+        return validateResult(result);
+      } catch (JaninoRelMetadataProvider.NoHandler e) {
+        distinctRowCountHandler = metadataProvider.revise(e.relClass,
+          BuiltInMetadata.DistinctRowCount.DEF);
+      }
+    }
   }
 
   /**
    * Returns the
-   * {@link org.apache.calcite.rel.metadata.BuiltInMetadata.Predicates#getPredicates()}
+   * {@link BuiltInMetadata.Predicates#getPredicates()}
    * statistic.
    *
    * @param rel the relational expression
    * @return Predicates that can be pulled above this RelNode
    */
-  public static RelOptPredicateList getPulledUpPredicates(RelNode rel) {
-    final BuiltInMetadata.Predicates metadata =
-        rel.metadata(BuiltInMetadata.Predicates.class);
-    return metadata.getPredicates();
+  public RelOptPredicateList getPulledUpPredicates(RelNode rel) {
+    for (;;) {
+      try {
+        return predicatesHandler.getPredicates(rel, this);
+      } catch (JaninoRelMetadataProvider.NoHandler e) {
+        predicatesHandler = metadataProvider.revise(e.relClass,
+          BuiltInMetadata.Predicates.DEF);
+      }
+    }
   }
 
   /**
@@ -508,12 +735,39 @@ public abstract class RelMetadataQuery {
    * @return true for visible, false for invisible; if no metadata is available,
    * defaults to true
    */
-  public static boolean isVisibleInExplain(RelNode rel,
-      SqlExplainLevel explainLevel) {
-    final BuiltInMetadata.ExplainVisibility metadata =
-        rel.metadata(BuiltInMetadata.ExplainVisibility.class);
-    Boolean b = metadata.isVisibleInExplain(explainLevel);
-    return b == null || b;
+  public boolean isVisibleInExplain(RelNode rel,
+                                    SqlExplainLevel explainLevel) {
+    for (;;) {
+      try {
+        Boolean b = explainVisibilityHandler.isVisibleInExplain(rel, this,
+          explainLevel);
+        return b == null || b;
+      } catch (JaninoRelMetadataProvider.NoHandler e) {
+        explainVisibilityHandler = metadataProvider.revise(e.relClass,
+          BuiltInMetadata.ExplainVisibility.DEF);
+      }
+    }
+  }
+
+  private static Double validatePercentage(Double result) {
+    assert isPercentage(result, true);
+    return result;
+  }
+
+  /**
+   * Returns the
+   * {@link BuiltInMetadata.Distribution#distribution()}
+   * statistic.
+   *
+   * @param rel          the relational expression
+   *
+   * @return description of how the rows in the relational expression are
+   * physically distributed
+   */
+  public RelDistribution getDistribution(RelNode rel) {
+    final BuiltInMetadata.Distribution metadata =
+      rel.metadata(BuiltInMetadata.Distribution.class, this);
+    return metadata.distribution();
   }
 
   private static boolean isPercentage(Double result, boolean fail) {

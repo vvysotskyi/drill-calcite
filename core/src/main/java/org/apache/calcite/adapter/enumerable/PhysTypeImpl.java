@@ -576,7 +576,7 @@ public class PhysTypeImpl implements PhysType {
                 null,
                 BuiltInMethod.LIST_N.method,
                 Expressions.newArrayInit(
-                    Object.class,
+                    Comparable.class,
                     list)),
             v1);
       }

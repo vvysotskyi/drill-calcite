@@ -62,14 +62,15 @@ public class HepRelVertex extends AbstractRelNode {
     return this;
   }
 
-  @Override public RelOptCost computeSelfCost(RelOptPlanner planner) {
+  @Override public RelOptCost computeSelfCost(RelOptPlanner planner,
+      RelMetadataQuery mq) {
     // HepRelMetadataProvider is supposed to intercept this
     // and redirect to the real rels.
     throw Util.newInternal("should never get here");
   }
 
-  @Override public double getRows() {
-    return RelMetadataQuery.getRowCount(currentRel);
+  @Override public double estimateRowCount(RelMetadataQuery mq) {
+    return mq.getRowCount(currentRel);
   }
 
   @Override protected RelDataType deriveRowType() {

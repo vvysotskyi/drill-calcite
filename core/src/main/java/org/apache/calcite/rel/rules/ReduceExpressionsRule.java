@@ -129,8 +129,9 @@ public abstract class ReduceExpressionsRule extends RelOptRule {
           Lists.newArrayList(filter.getCondition());
       RexNode newConditionExp;
       boolean reduced;
+      final RelMetadataQuery mq = RelMetadataQuery.instance();
       final RelOptPredicateList predicates =
-          RelMetadataQuery.getPulledUpPredicates(filter.getInput());
+          mq.getPulledUpPredicates(filter.getInput());
       if (reduceExpressions(filter, expList, predicates)) {
         assert expList.size() == 1;
         newConditionExp = expList.get(0);
@@ -234,8 +235,9 @@ public abstract class ReduceExpressionsRule extends RelOptRule {
           "ReduceExpressionsRule_Project") {
         public void onMatch(RelOptRuleCall call) {
           LogicalProject project = call.rel(0);
+          final RelMetadataQuery mq = RelMetadataQuery.instance();
           final RelOptPredicateList predicates =
-              RelMetadataQuery.getPulledUpPredicates(project.getInput());
+              mq.getPulledUpPredicates(project.getInput());
           final List<RexNode> expList =
               Lists.newArrayList(project.getProjects());
           if (reduceExpressions(project, expList, predicates)) {
@@ -256,10 +258,11 @@ public abstract class ReduceExpressionsRule extends RelOptRule {
           final Join join = call.rel(0);
           final List<RexNode> expList = Lists.newArrayList(join.getCondition());
           final int fieldCount = join.getLeft().getRowType().getFieldCount();
+          final RelMetadataQuery mq = RelMetadataQuery.instance();
           final RelOptPredicateList leftPredicates =
-              RelMetadataQuery.getPulledUpPredicates(join.getLeft());
+              mq.getPulledUpPredicates(join.getLeft());
           final RelOptPredicateList rightPredicates =
-              RelMetadataQuery.getPulledUpPredicates(join.getRight());
+              mq.getPulledUpPredicates(join.getRight());
           final RelOptPredicateList predicates =
               leftPredicates.union(rightPredicates.shift(fieldCount));
           if (!reduceExpressions(join, expList, predicates)) {

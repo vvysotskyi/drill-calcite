@@ -24,7 +24,8 @@ import org.apache.calcite.util.BuiltInMethod;
  * RelMdExplainVisibility supplies a default implementation of
  * {@link RelMetadataQuery#isVisibleInExplain} for the standard logical algebra.
  */
-public class RelMdExplainVisibility {
+public class RelMdExplainVisibility
+    implements MetadataHandler<BuiltInMetadata.ExplainVisibility> {
   public static final RelMetadataProvider SOURCE =
       ReflectiveRelMetadataProvider.reflectiveSource(
           BuiltInMethod.EXPLAIN_VISIBILITY.method,
@@ -36,8 +37,18 @@ public class RelMdExplainVisibility {
 
   //~ Methods ----------------------------------------------------------------
 
-  // Catch-all rule when none of the others apply.
-  public Boolean isVisibleInExplain(RelNode rel, SqlExplainLevel explainLevel) {
+  public MetadataDef<BuiltInMetadata.ExplainVisibility> getDef() {
+    return BuiltInMetadata.ExplainVisibility.DEF;
+  }
+
+  /** Catch-all implementation for
+   * {@link BuiltInMetadata.ExplainVisibility#isVisibleInExplain(SqlExplainLevel)},
+   * invoked using reflection.
+   *
+   * @see org.apache.calcite.rel.metadata.RelMetadataQuery#isVisibleInExplain(RelNode, SqlExplainLevel)
+   */
+  public Boolean isVisibleInExplain(RelNode rel, RelMetadataQuery mq,
+      SqlExplainLevel explainLevel) {
     // no information available
     return null;
   }

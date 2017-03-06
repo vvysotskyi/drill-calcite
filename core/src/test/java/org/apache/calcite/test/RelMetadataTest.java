@@ -142,7 +142,8 @@ public class RelMetadataTest extends SqlToRelTestBase {
       double expected,
       double epsilon) {
     RelNode rel = convertSql(sql);
-    Double result = RelMetadataQuery.getPercentageOriginalRows(rel);
+    final RelMetadataQuery mq = RelMetadataQuery.instance();
+    Double result = mq.getPercentageOriginalRows(rel);
     assertTrue(result != null);
     assertEquals(expected, result, epsilon);
   }
@@ -227,7 +228,8 @@ public class RelMetadataTest extends SqlToRelTestBase {
 
   private Set<RelColumnOrigin> checkColumnOrigin(String sql) {
     RelNode rel = convertSql(sql);
-    return RelMetadataQuery.getColumnOrigins(rel, 0);
+    final RelMetadataQuery mq = RelMetadataQuery.instance();
+    return mq.getColumnOrigins(rel, 0);
   }
 
   private void checkNoColumnOrigin(String sql) {
@@ -429,7 +431,8 @@ public class RelMetadataTest extends SqlToRelTestBase {
       String sql,
       double expected) {
     RelNode rel = convertSql(sql);
-    Double result = RelMetadataQuery.getRowCount(rel);
+    final RelMetadataQuery mq = RelMetadataQuery.instance();
+    Double result = mq.getRowCount(rel);
     assertTrue(result != null);
     assertEquals(expected, result, 0d);
   }
@@ -487,7 +490,8 @@ public class RelMetadataTest extends SqlToRelTestBase {
       String sql,
       double expected) {
     RelNode rel = convertSql(sql);
-    Double result = RelMetadataQuery.getSelectivity(rel, null);
+    final RelMetadataQuery mq = RelMetadataQuery.instance();
+    Double result = mq.getSelectivity(rel, null);
     assertTrue(result != null);
     assertEquals(expected, result, EPSILON);
   }
@@ -531,7 +535,8 @@ public class RelMetadataTest extends SqlToRelTestBase {
   private void checkRelSelectivity(
       RelNode rel,
       double expected) {
-    Double result = RelMetadataQuery.getSelectivity(rel, null);
+    final RelMetadataQuery mq = RelMetadataQuery.instance();
+    Double result = mq.getSelectivity(rel, null);
     assertTrue(result != null);
     assertEquals(expected, result, EPSILON);
   }
@@ -575,7 +580,8 @@ public class RelMetadataTest extends SqlToRelTestBase {
         new CachingRelMetadataProvider(
             rel.getCluster().getMetadataProvider(),
             rel.getCluster().getPlanner()));
-    Double result = RelMetadataQuery.getSelectivity(rel, null);
+    final RelMetadataQuery mq = RelMetadataQuery.instance();
+    Double result = mq.getSelectivity(rel, null);
     assertThat(result,
         nearTo(DEFAULT_COMP_SELECTIVITY * DEFAULT_EQUAL_SELECTIVITY, EPSILON));
   }
@@ -583,22 +589,23 @@ public class RelMetadataTest extends SqlToRelTestBase {
   @Test public void testDistinctRowCountTable() {
     // no unique key information is available so return null
     RelNode rel = convertSql("select * from emp where deptno = 10");
-    ImmutableBitSet groupKey = ImmutableBitSet.of();
-    Double result =
-        RelMetadataQuery.getDistinctRowCount(
-            rel, groupKey, null);
-    assertTrue(result == null);
+    final RelMetadataQuery mq = RelMetadataQuery.instance();
+    ImmutableBitSet groupKey =
+        ImmutableBitSet.of(rel.getRowType().getFieldNames().indexOf("DEPTNO"));
+    Double result = mq.getDistinctRowCount(rel, groupKey, null);
+    assertThat(result, nullValue());
   }
 
   /** Asserts that {@link RelMetadataQuery#getUniqueKeys(RelNode)}
    * and {@link RelMetadataQuery#areColumnsUnique(RelNode, ImmutableBitSet)}
    * return consistent results. */
   private void assertUniqueConsistent(RelNode rel) {
-    Set<ImmutableBitSet> uniqueKeys = RelMetadataQuery.getUniqueKeys(rel);
+    final RelMetadataQuery mq = RelMetadataQuery.instance();
+    final Set<ImmutableBitSet> uniqueKeys = mq.getUniqueKeys(rel);
     final ImmutableBitSet allCols =
         ImmutableBitSet.range(0, rel.getRowType().getFieldCount());
     for (ImmutableBitSet key : allCols.powerSet()) {
-      Boolean result2 = RelMetadataQuery.areColumnsUnique(rel, key);
+      Boolean result2 = mq.areColumnsUnique(rel, key);
       assertTrue(result2 == null || result2 == isUnique(uniqueKeys, key));
     }
   }
@@ -620,14 +627,16 @@ public class RelMetadataTest extends SqlToRelTestBase {
    * NullPointerException"</a>. */
   @Test public void testJoinUniqueKeys() {
     RelNode rel = convertSql("select * from emp join dept using (deptno)");
-    Set<ImmutableBitSet> result = RelMetadataQuery.getUniqueKeys(rel);
+    final RelMetadataQuery mq = RelMetadataQuery.instance();
+    Set<ImmutableBitSet> result = mq.getUniqueKeys(rel);
     assertThat(result.isEmpty(), is(true));
     assertUniqueConsistent(rel);
   }
 
   @Test public void testGroupByEmptyUniqueKeys() {
     RelNode rel = convertSql("select count(*) from emp");
-    Set<ImmutableBitSet> result = RelMetadataQuery.getUniqueKeys(rel);
+    final RelMetadataQuery mq = RelMetadataQuery.instance();
+    Set<ImmutableBitSet> result = mq.getUniqueKeys(rel);
     assertThat(result,
         CoreMatchers.<Set<ImmutableBitSet>>equalTo(
             ImmutableSet.of(ImmutableBitSet.of())));
@@ -636,7 +645,8 @@ public class RelMetadataTest extends SqlToRelTestBase {
 
   @Test public void testGroupByEmptyHavingUniqueKeys() {
     RelNode rel = convertSql("select count(*) from emp where 1 = 1");
-    Set<ImmutableBitSet> result = RelMetadataQuery.getUniqueKeys(rel);
+    final RelMetadataQuery mq = RelMetadataQuery.instance();
+    final Set<ImmutableBitSet> result = mq.getUniqueKeys(rel);
     assertThat(result,
         CoreMatchers.<Set<ImmutableBitSet>>equalTo(
             ImmutableSet.of(ImmutableBitSet.of())));
@@ -646,7 +656,8 @@ public class RelMetadataTest extends SqlToRelTestBase {
   @Test public void testGroupBy() {
     RelNode rel = convertSql("select deptno, count(*), sum(sal) from emp\n"
             + "group by deptno");
-    Set<ImmutableBitSet> result = RelMetadataQuery.getUniqueKeys(rel);
+    final RelMetadataQuery mq = RelMetadataQuery.instance();
+    final Set<ImmutableBitSet> result = mq.getUniqueKeys(rel);
     assertThat(result,
         CoreMatchers.<Set<ImmutableBitSet>>equalTo(
             ImmutableSet.of(ImmutableBitSet.of(0))));
@@ -657,7 +668,8 @@ public class RelMetadataTest extends SqlToRelTestBase {
     RelNode rel = convertSql("select deptno from emp\n"
             + "union\n"
             + "select deptno from dept");
-    Set<ImmutableBitSet> result = RelMetadataQuery.getUniqueKeys(rel);
+    final RelMetadataQuery mq = RelMetadataQuery.instance();
+    final Set<ImmutableBitSet> result = mq.getUniqueKeys(rel);
     assertThat(result,
         CoreMatchers.<Set<ImmutableBitSet>>equalTo(
             ImmutableSet.of(ImmutableBitSet.of(0))));
@@ -678,22 +690,23 @@ public class RelMetadataTest extends SqlToRelTestBase {
 
     // Top node is a filter. Its metadata uses getColType(RelNode, int).
     assertThat(rel, instanceOf(LogicalFilter.class));
-    assertThat(rel.metadata(ColType.class).getColType(0),
+    final RelMetadataQuery mq = RelMetadataQuery.instance();
+    assertThat(rel.metadata(ColType.class, mq).getColType(0),
         equalTo("DEPTNO-rel"));
-    assertThat(rel.metadata(ColType.class).getColType(1),
+    assertThat(rel.metadata(ColType.class, mq).getColType(1),
         equalTo("EXPR$1-rel"));
 
     // Next node is an aggregate. Its metadata uses
     // getColType(LogicalAggregate, int).
     final RelNode input = rel.getInput(0);
     assertThat(input, instanceOf(LogicalAggregate.class));
-    assertThat(input.metadata(ColType.class).getColType(0),
+    assertThat(input.metadata(ColType.class, mq).getColType(0),
         equalTo("DEPTNO-agg"));
 
     // There is no caching. Another request causes another call to the provider.
     assertThat(buf.toString(), equalTo("[DEPTNO-rel, EXPR$1-rel, DEPTNO-agg]"));
     assertThat(buf.size(), equalTo(3));
-    assertThat(input.metadata(ColType.class).getColType(0),
+    assertThat(input.metadata(ColType.class, mq).getColType(0),
         equalTo("DEPTNO-agg"));
     assertThat(buf.size(), equalTo(4));
 
@@ -703,19 +716,19 @@ public class RelMetadataTest extends SqlToRelTestBase {
     rel.getCluster().setMetadataProvider(
         new CachingRelMetadataProvider(
             rel.getCluster().getMetadataProvider(), planner));
-    assertThat(input.metadata(ColType.class).getColType(0),
+    assertThat(input.metadata(ColType.class, mq).getColType(0),
         equalTo("DEPTNO-agg"));
     assertThat(buf.size(), equalTo(5));
-    assertThat(input.metadata(ColType.class).getColType(0),
+    assertThat(input.metadata(ColType.class, mq).getColType(0),
         equalTo("DEPTNO-agg"));
     assertThat(buf.size(), equalTo(5));
-    assertThat(input.metadata(ColType.class).getColType(1),
+    assertThat(input.metadata(ColType.class, mq).getColType(1),
         equalTo("EXPR$1-agg"));
     assertThat(buf.size(), equalTo(6));
-    assertThat(input.metadata(ColType.class).getColType(1),
+    assertThat(input.metadata(ColType.class, mq).getColType(1),
         equalTo("EXPR$1-agg"));
     assertThat(buf.size(), equalTo(6));
-    assertThat(input.metadata(ColType.class).getColType(0),
+    assertThat(input.metadata(ColType.class, mq).getColType(0),
         equalTo("DEPTNO-agg"));
     assertThat(buf.size(), equalTo(6));
 
@@ -723,10 +736,10 @@ public class RelMetadataTest extends SqlToRelTestBase {
     long timestamp = planner.getRelMetadataTimestamp(rel);
     assertThat(timestamp, equalTo(0L));
     ((MockRelOptPlanner) planner).setRelMetadataTimestamp(timestamp + 1);
-    assertThat(input.metadata(ColType.class).getColType(0),
+    assertThat(input.metadata(ColType.class, mq).getColType(0),
         equalTo("DEPTNO-agg"));
     assertThat(buf.size(), equalTo(7));
-    assertThat(input.metadata(ColType.class).getColType(0),
+    assertThat(input.metadata(ColType.class, mq).getColType(0),
         equalTo("DEPTNO-agg"));
     assertThat(buf.size(), equalTo(7));
   }
@@ -776,7 +789,8 @@ public class RelMetadataTest extends SqlToRelTestBase {
                 rexBuilder.makeInputRef(empSort, 0),
                 rexBuilder.makeInputRef(empSort, 3)));
 
-    collations = RelMdCollation.project(empSort, projects);
+    final RelMetadataQuery mq = RelMetadataQuery.instance();
+    collations = RelMdCollation.project(mq, empSort, projects);
     assertThat(collations.size(), equalTo(1));
     assertThat(collations.get(0).getFieldCollations().size(), equalTo(2));
     assertThat(collations.get(0).getFieldCollations().get(0).getFieldIndex(),
@@ -805,12 +819,13 @@ public class RelMetadataTest extends SqlToRelTestBase {
       throw Throwables.propagate(e);
     }
     collations =
-        RelMdCollation.mergeJoin(project, deptSort, leftKeys, rightKeys);
+        RelMdCollation.mergeJoin(mq, project, deptSort, leftKeys,
+            rightKeys);
     assertThat(collations,
         equalTo(join.getTraitSet().getTraits(RelCollationTraitDef.INSTANCE)));
 
     // Values (empty)
-    collations = RelMdCollation.values(empTable.getRowType(),
+    collations = RelMdCollation.values(mq, empTable.getRowType(),
         ImmutableList.<ImmutableList<RexLiteral>>of());
     assertThat(collations.toString(),
         equalTo("[[0, 1, 2, 3, 4, 5, 6, 7, 8], "
@@ -825,7 +840,7 @@ public class RelMetadataTest extends SqlToRelTestBase {
 
     final LogicalValues emptyValues =
         LogicalValues.createEmpty(cluster, empTable.getRowType());
-    assertThat(RelMetadataQuery.collations(emptyValues), equalTo(collations));
+    assertThat(mq.collations(emptyValues), equalTo(collations));
 
     // Values (non-empty)
     final RelDataType rowType = cluster.getTypeFactory().builder()
@@ -843,13 +858,13 @@ public class RelMetadataTest extends SqlToRelTestBase {
     addRow(tuples, rexBuilder, 1, 2, 0, 3);
     addRow(tuples, rexBuilder, 2, 3, 2, 2);
     addRow(tuples, rexBuilder, 3, 3, 1, 4);
-    collations = RelMdCollation.values(rowType, tuples.build());
+    collations = RelMdCollation.values(mq, rowType, tuples.build());
     assertThat(collations.toString(),
         equalTo("[[0, 1, 2, 3], [1, 3]]"));
 
     final LogicalValues values =
         LogicalValues.create(cluster, rowType, tuples.build());
-    assertThat(RelMetadataQuery.collations(values), equalTo(collations));
+    assertThat(mq.collations(values), equalTo(collations));
   }
 
   private void addRow(ImmutableList.Builder<ImmutableList<RexLiteral>> builder,
@@ -892,10 +907,11 @@ public class RelMetadataTest extends SqlToRelTestBase {
   private void checkAverageRowSize(RelOptCluster cluster, RelOptTable empTable,
       RelOptTable deptTable) {
     final RexBuilder rexBuilder = cluster.getRexBuilder();
+    final RelMetadataQuery mq = RelMetadataQuery.instance();
     final LogicalTableScan empScan = LogicalTableScan.create(cluster, empTable);
 
-    Double rowSize = RelMetadataQuery.getAverageRowSize(empScan);
-    List<Double> columnSizes = RelMetadataQuery.getAverageColumnSizes(empScan);
+    Double rowSize = mq.getAverageRowSize(empScan);
+    List<Double> columnSizes = mq.getAverageColumnSizes(empScan);
 
     assertThat(columnSizes.size(),
         equalTo(empScan.getRowType().getFieldCount()));
@@ -906,8 +922,8 @@ public class RelMetadataTest extends SqlToRelTestBase {
     // Empty values
     final LogicalValues emptyValues =
         LogicalValues.createEmpty(cluster, empTable.getRowType());
-    rowSize = RelMetadataQuery.getAverageRowSize(emptyValues);
-    columnSizes = RelMetadataQuery.getAverageColumnSizes(emptyValues);
+    rowSize = mq.getAverageRowSize(emptyValues);
+    columnSizes = mq.getAverageColumnSizes(emptyValues);
     assertThat(columnSizes.size(),
         equalTo(emptyValues.getRowType().getFieldCount()));
     assertThat(columnSizes,
@@ -927,8 +943,8 @@ public class RelMetadataTest extends SqlToRelTestBase {
     addRow(tuples, rexBuilder, 3, "2",          null);
     final LogicalValues values =
         LogicalValues.create(cluster, rowType, tuples.build());
-    rowSize = RelMetadataQuery.getAverageRowSize(values);
-    columnSizes = RelMetadataQuery.getAverageColumnSizes(values);
+    rowSize = mq.getAverageRowSize(values);
+    columnSizes = mq.getAverageColumnSizes(values);
     assertThat(columnSizes.size(),
         equalTo(values.getRowType().getFieldCount()));
     assertThat(columnSizes, equalTo(Arrays.asList(4.0, 8.0, 3.0)));
@@ -938,8 +954,8 @@ public class RelMetadataTest extends SqlToRelTestBase {
     final LogicalUnion union =
         LogicalUnion.create(ImmutableList.<RelNode>of(empScan, emptyValues),
             true);
-    rowSize = RelMetadataQuery.getAverageRowSize(union);
-    columnSizes = RelMetadataQuery.getAverageColumnSizes(union);
+    rowSize = mq.getAverageRowSize(union);
+    columnSizes = mq.getAverageColumnSizes(union);
     assertThat(columnSizes.size(), equalTo(9));
     assertThat(columnSizes,
         equalTo(Arrays.asList(4.0, 40.0, 20.0, 4.0, 8.0, 4.0, 4.0, 4.0, 1.0)));
@@ -953,8 +969,8 @@ public class RelMetadataTest extends SqlToRelTestBase {
             rexBuilder.makeCall(SqlStdOperatorTable.LESS_THAN,
                 rexBuilder.makeInputRef(deptScan, 0),
                 rexBuilder.makeExactLiteral(BigDecimal.TEN)));
-    rowSize = RelMetadataQuery.getAverageRowSize(filter);
-    columnSizes = RelMetadataQuery.getAverageColumnSizes(filter);
+    rowSize = mq.getAverageRowSize(filter);
+    columnSizes = mq.getAverageColumnSizes(filter);
     assertThat(columnSizes.size(), equalTo(2));
     assertThat(columnSizes, equalTo(Arrays.asList(4.0, 20.0)));
     assertThat(rowSize, equalTo(24.0));
@@ -971,8 +987,8 @@ public class RelMetadataTest extends SqlToRelTestBase {
                 rexBuilder.makeCall(SqlStdOperatorTable.CHAR_LENGTH,
                     rexBuilder.makeInputRef(filter, 1))),
             (List<String>) null);
-    rowSize = RelMetadataQuery.getAverageRowSize(deptProject);
-    columnSizes = RelMetadataQuery.getAverageColumnSizes(deptProject);
+    rowSize = mq.getAverageRowSize(deptProject);
+    columnSizes = mq.getAverageColumnSizes(deptProject);
     assertThat(columnSizes.size(), equalTo(4));
     assertThat(columnSizes, equalTo(Arrays.asList(4.0, 20.0, 4.0, 4.0)));
     assertThat(rowSize, equalTo(32.0));
@@ -981,8 +997,8 @@ public class RelMetadataTest extends SqlToRelTestBase {
     final LogicalJoin join =
         LogicalJoin.create(empScan, deptProject, rexBuilder.makeLiteral(true),
             JoinRelType.INNER, ImmutableSet.<String>of());
-    rowSize = RelMetadataQuery.getAverageRowSize(join);
-    columnSizes = RelMetadataQuery.getAverageColumnSizes(join);
+    rowSize = mq.getAverageRowSize(join);
+    columnSizes = mq.getAverageColumnSizes(join);
     assertThat(columnSizes.size(), equalTo(13));
     assertThat(columnSizes,
         equalTo(
@@ -997,25 +1013,25 @@ public class RelMetadataTest extends SqlToRelTestBase {
             ImmutableList.of(
                 AggregateCall.create(
                     SqlStdOperatorTable.COUNT, false, ImmutableIntList.of(),
-                    2, join, null, null)));
-    rowSize = RelMetadataQuery.getAverageRowSize(aggregate);
-    columnSizes = RelMetadataQuery.getAverageColumnSizes(aggregate);
+                    -1, 2, join, null, null)));
+    rowSize = mq.getAverageRowSize(aggregate);
+    columnSizes = mq.getAverageColumnSizes(aggregate);
     assertThat(columnSizes.size(), equalTo(3));
     assertThat(columnSizes, equalTo(Arrays.asList(4.0, 20.0, 8.0)));
     assertThat(rowSize, equalTo(32.0));
 
     // Smoke test Parallelism and Memory metadata providers
-    assertThat(RelMetadataQuery.memory(aggregate), nullValue());
-    assertThat(RelMetadataQuery.cumulativeMemoryWithinPhase(aggregate),
+    assertThat(mq.memory(aggregate), nullValue());
+    assertThat(mq.cumulativeMemoryWithinPhase(aggregate),
         nullValue());
-    assertThat(RelMetadataQuery.cumulativeMemoryWithinPhaseSplit(aggregate),
+    assertThat(mq.cumulativeMemoryWithinPhaseSplit(aggregate),
         nullValue());
-    assertThat(RelMetadataQuery.isPhaseTransition(aggregate), is(false));
-    assertThat(RelMetadataQuery.splitCount(aggregate), is(1));
+    assertThat(mq.isPhaseTransition(aggregate), is(false));
+    assertThat(mq.splitCount(aggregate), is(1));
   }
 
   /** Unit test for
-   * {@link org.apache.calcite.rel.metadata.RelMdPredicates#getPredicates(SemiJoin)}. */
+   * {@link org.apache.calcite.rel.metadata.RelMdPredicates#getPredicates(SemiJoin, RelMetadataQuery)}. */
   @Test public void testPredicates() {
     final Project rel = (Project) convertSql("select * from emp, dept");
     final Join join = (Join) rel.getInput();
@@ -1035,10 +1051,11 @@ public class RelMetadataTest extends SqlToRelTestBase {
   private void checkPredicates(RelOptCluster cluster, RelOptTable empTable,
       RelOptTable deptTable) {
     final RexBuilder rexBuilder = cluster.getRexBuilder();
+    final RelMetadataQuery mq = RelMetadataQuery.instance();
     final LogicalTableScan empScan = LogicalTableScan.create(cluster, empTable);
 
     RelOptPredicateList predicates =
-        RelMetadataQuery.getPulledUpPredicates(empScan);
+        mq.getPulledUpPredicates(empScan);
     assertThat(predicates.pulledUpPredicates.isEmpty(), is(true));
 
     final LogicalFilter filter =
@@ -1048,7 +1065,7 @@ public class RelMetadataTest extends SqlToRelTestBase {
                     empScan.getRowType().getFieldNames().indexOf("EMPNO")),
                 rexBuilder.makeExactLiteral(BigDecimal.ONE)));
 
-    predicates = RelMetadataQuery.getPulledUpPredicates(filter);
+    predicates = mq.getPulledUpPredicates(filter);
     assertThat(predicates.pulledUpPredicates.toString(), is("[=($0, 1)]"));
 
     final LogicalTableScan deptScan =
@@ -1072,7 +1089,7 @@ public class RelMetadataTest extends SqlToRelTestBase {
             ImmutableIntList.of(rightDeptnoField.getIndex()
                     + empScan.getRowType().getFieldCount()));
 
-    predicates = RelMetadataQuery.getPulledUpPredicates(semiJoin);
+    predicates = mq.getPulledUpPredicates(semiJoin);
     assertThat(predicates.pulledUpPredicates.toString(), is("[=($0, 1)]"));
     assertThat(predicates.leftInferredPredicates.toString(), is("[]"));
     assertThat(predicates.rightInferredPredicates.isEmpty(), is(true));
@@ -1104,7 +1121,7 @@ public class RelMetadataTest extends SqlToRelTestBase {
      * {@link org.apache.calcite.rel.logical.LogicalAggregate}, called via
      * reflection. */
     @SuppressWarnings("UnusedDeclaration")
-    public String getColType(Aggregate rel, int column) {
+    public String getColType(Aggregate rel, RelMetadataQuery mq, int column) {
       final String name =
           rel.getRowType().getFieldList().get(column).getName() + "-agg";
       THREAD_LIST.get().add(name);
@@ -1114,7 +1131,7 @@ public class RelMetadataTest extends SqlToRelTestBase {
     /** Implementation of {@link ColType#getColType(int)} for
      * {@link RelNode}, called via reflection. */
     @SuppressWarnings("UnusedDeclaration")
-    public String getColType(RelNode rel, int column) {
+    public String getColType(RelNode rel, RelMetadataQuery mq, int column) {
       final String name =
           rel.getRowType().getFieldList().get(column).getName() + "-rel";
       THREAD_LIST.get().add(name);

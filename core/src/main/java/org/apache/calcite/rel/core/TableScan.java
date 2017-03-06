@@ -27,6 +27,7 @@ import org.apache.calcite.rel.RelInput;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.RelShuttle;
 import org.apache.calcite.rel.RelWriter;
+import org.apache.calcite.rel.metadata.RelMetadataQuery;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeField;
 import org.apache.calcite.rex.RexBuilder;
@@ -69,7 +70,7 @@ public abstract class TableScan extends AbstractRelNode {
 
   //~ Methods ----------------------------------------------------------------
 
-  @Override public double getRows() {
+  @Override public double estimateRowCount(RelMetadataQuery mq) {
     return table.getRowCount();
   }
 
@@ -81,11 +82,8 @@ public abstract class TableScan extends AbstractRelNode {
     return table.getCollationList();
   }
 
-  @Override public boolean isKey(ImmutableBitSet columns) {
-    return table.isKey(columns);
-  }
-
-  @Override public RelOptCost computeSelfCost(RelOptPlanner planner) {
+  @Override public RelOptCost computeSelfCost(RelOptPlanner planner,
+      RelMetadataQuery mq) {
     double dRows = table.getRowCount();
     double dCpu = dRows + 1; // ensure non-zero cost
     double dIo = 0;

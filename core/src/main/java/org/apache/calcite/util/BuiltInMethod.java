@@ -173,7 +173,8 @@ public enum BuiltInMethod {
   FUNCTION0_APPLY(Function0.class, "apply"),
   FUNCTION1_APPLY(Function1.class, "apply", Object.class),
   ARRAYS_AS_LIST(Arrays.class, "asList", Object[].class),
-  LIST_N(FlatLists.class, "of", Object[].class),
+  ARRAY(SqlFunctions.class, "array", Object[].class),
+  LIST_N(FlatLists.class, "copyOf", Comparable[].class),
   LIST2(FlatLists.class, "of", Object.class, Object.class),
   LIST3(FlatLists.class, "of", Object.class, Object.class, Object.class),
   COMPARABLE_EMPTY_LIST(FlatLists.class, "COMPARABLE_EMPTY_LIST", true),
@@ -359,7 +360,7 @@ public enum BuiltInMethod {
     MAP = builder.build();
   }
 
-  private BuiltInMethod(Method method, Constructor constructor, Field field) {
+  BuiltInMethod(Method method, Constructor constructor, Field field) {
     this.method = method;
     this.constructor = constructor;
     this.field = field;

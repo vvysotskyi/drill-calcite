@@ -20,7 +20,6 @@ import org.apache.calcite.adapter.enumerable.EnumerableConvention;
 import org.apache.calcite.plan.Convention;
 import org.apache.calcite.plan.ConventionTraitDef;
 import org.apache.calcite.plan.RelOptCluster;
-import org.apache.calcite.plan.RelOptCost;
 import org.apache.calcite.plan.RelOptPlanner;
 import org.apache.calcite.plan.RelOptRule;
 import org.apache.calcite.plan.RelOptRuleCall;
@@ -351,11 +350,6 @@ public class VolcanoPlannerTraitTest {
     }
 
     // implement RelNode
-    public RelOptCost computeSelfCost(RelOptPlanner planner) {
-      return planner.getCostFactory().makeInfiniteCost();
-    }
-
-    // implement RelNode
     protected RelDataType deriveRowType() {
       final RelDataTypeFactory typeFactory = getCluster().getTypeFactory();
       return typeFactory.builder()
@@ -396,11 +390,6 @@ public class VolcanoPlannerTraitTest {
           label);
     }
 
-    // implement RelNode
-    public RelOptCost computeSelfCost(RelOptPlanner planner) {
-      return planner.getCostFactory().makeTinyCost();
-    }
-
     // TODO: SWZ Implement clone?
   }
 
@@ -411,11 +400,6 @@ public class VolcanoPlannerTraitTest {
         RelTraitSet traits,
         RelNode child) {
       super(cluster, traits, child);
-    }
-
-    // implement RelNode
-    public RelOptCost computeSelfCost(RelOptPlanner planner) {
-      return planner.getCostFactory().makeInfiniteCost();
     }
 
     // implement RelNode
@@ -470,11 +454,6 @@ public class VolcanoPlannerTraitTest {
           cluster,
           cluster.traitSetOf(EnumerableConvention.INSTANCE),
           child);
-    }
-
-    // implement RelNode
-    public RelOptCost computeSelfCost(RelOptPlanner planner) {
-      return planner.getCostFactory().makeTinyCost();
     }
 
     public RelNode copy(RelTraitSet traitSet, List<RelNode> inputs) {

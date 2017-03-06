@@ -216,9 +216,9 @@ public class LoptOptimizeJoinRule extends RelOptRule {
         // part of an equality join condition, nulls are filtered out
         // by the join.  So, it's ok if there are nulls in the join
         // keys.
-        if (RelMdUtil.areColumnsDefinitelyUniqueWhenNullsFiltered(
-            multiJoin.getJoinFactor(factIdx),
-            joinKeys)) {
+        final RelMetadataQuery mq = RelMetadataQuery.instance();
+        if (RelMdUtil.areColumnsDefinitelyUniqueWhenNullsFiltered(mq,
+            multiJoin.getJoinFactor(factIdx), joinKeys)) {
           multiJoin.addRemovableOuterJoinFactor(factIdx);
 
           // Since we are no longer joining this factor,
@@ -369,13 +369,14 @@ public class LoptOptimizeJoinRule extends RelOptRule {
     if (multiJoin.getMultiJoinRel().isFullOuterJoin()) {
       return returnList;
     }
+    final RelMetadataQuery mq = RelMetadataQuery.instance();
     for (int factIdx = 0; factIdx < multiJoin.getNumJoinFactors(); factIdx++) {
       if (multiJoin.isNullGenerating(factIdx)
           || (multiJoin.getJoinRemovalFactor(factIdx) != null)) {
         continue;
       }
       final RelNode rel = multiJoin.getJoinFactor(factIdx);
-      final RelOptTable table = RelMetadataQuery.getTableOrigin(rel);
+      final RelOptTable table = mq.getTableOrigin(rel);
       if (table != null) {
         returnList.put(factIdx, table);
       }
@@ -429,7 +430,8 @@ public class LoptOptimizeJoinRule extends RelOptRule {
                 rightRel.getRowType().getFieldList(),
                 adjustments));
 
-    return areSelfJoinKeysUnique(leftRel, rightRel, joinFilters);
+    final RelMetadataQuery mq = RelMetadataQuery.instance();
+    return areSelfJoinKeysUnique(mq, leftRel, rightRel, joinFilters);
   }
 
   /**
@@ -446,7 +448,7 @@ public class LoptOptimizeJoinRule extends RelOptRule {
       RelOptRuleCall call) {
     List<RelNode> plans = new ArrayList<RelNode>();
 
-    List<String> fieldNames =
+    final List<String> fieldNames =
         multiJoin.getMultiJoinRel().getRowType().getFieldNames();
 
     // generate the N join orderings
@@ -612,10 +614,9 @@ public class LoptOptimizeJoinRule extends RelOptRule {
     if (joinKeys.isEmpty()) {
       return null;
     } else {
-      return RelMetadataQuery.getDistinctRowCount(
-          semiJoinOpt.getChosenSemiJoin(factor),
-          joinKeys.build(),
-          null);
+      final RelMetadataQuery mq = semiJoinOpt.mq;
+      return mq.getDistinctRowCount(semiJoinOpt.getChosenSemiJoin(factor),
+          joinKeys.build(), null);
     }
   }
 
@@ -873,6 +874,8 @@ public class LoptOptimizeJoinRule extends RelOptRule {
       BitSet factorsNeeded,
       List<RexNode> filtersToAdd,
       boolean selfJoin) {
+    final RelMetadataQuery mq = semiJoinOpt.mq;
+
     // if the factor corresponds to the null generating factor in an outer
     // join that can be removed, then create a replacement join
     if (multiJoin.isRemovableOuterJoinFactor(factorToAdd)) {
@@ -937,11 +940,10 @@ public class LoptOptimizeJoinRule extends RelOptRule {
     RelOptCost costPushDown = null;
     RelOptCost costTop = null;
     if (pushDownTree != null) {
-      costPushDown =
-          RelMetadataQuery.getCumulativeCost(pushDownTree.getJoinTree());
+      costPushDown = mq.getCumulativeCost(pushDownTree.getJoinTree());
     }
     if (topTree != null) {
-      costTop = RelMetadataQuery.getCumulativeCost(topTree.getJoinTree());
+      costTop = mq.getCumulativeCost(topTree.getJoinTree());
     }
 
     if (pushDownTree == null) {
@@ -1334,7 +1336,7 @@ public class LoptOptimizeJoinRule extends RelOptRule {
       int factorAdded,
       List<Integer> origJoinOrder,
       List<RelDataTypeField> origFields) {
-    List<Integer> newJoinOrder = new ArrayList<Integer>();
+    List<Integer> newJoinOrder = new ArrayList<>();
     left.getTreeOrder(newJoinOrder);
     right.getTreeOrder(newJoinOrder);
 
@@ -1866,8 +1868,9 @@ public class LoptOptimizeJoinRule extends RelOptRule {
           ((LoptJoinTree.Leaf) left.getFactorTree()).getId());
     }
 
-    Double leftRowCount = RelMetadataQuery.getRowCount(left.getJoinTree());
-    Double rightRowCount = RelMetadataQuery.getRowCount(right.getJoinTree());
+    final RelMetadataQuery mq = RelMetadataQuery.instance();
+    final Double leftRowCount = mq.getRowCount(left.getJoinTree());
+    final Double rightRowCount = mq.getRowCount(right.getJoinTree());
 
     // The left side is smaller than the right if it has fewer rows,
     // or if it has the same number of rows as the right (excluding
@@ -1998,11 +2001,12 @@ public class LoptOptimizeJoinRule extends RelOptRule {
     }
 
     // Make sure the join is between the same simple factor
-    final RelOptTable leftTable = RelMetadataQuery.getTableOrigin(left);
+    final RelMetadataQuery mq = RelMetadataQuery.instance();
+    final RelOptTable leftTable = mq.getTableOrigin(left);
     if (leftTable == null) {
       return false;
     }
-    final RelOptTable rightTable = RelMetadataQuery.getTableOrigin(right);
+    final RelOptTable rightTable = mq.getTableOrigin(right);
     if (rightTable == null) {
       return false;
     }
@@ -2011,35 +2015,34 @@ public class LoptOptimizeJoinRule extends RelOptRule {
     }
 
     // Determine if the join keys are identical and unique
-    return areSelfJoinKeysUnique(left, right, joinRel.getCondition());
+    return areSelfJoinKeysUnique(mq, left, right, joinRel.getCondition());
   }
 
   /**
    * Determines if the equality portion of a self-join condition is between
    * identical keys that are unique.
    *
+   * @param mq Metadata query
    * @param leftRel left side of the join
    * @param rightRel right side of the join
    * @param joinFilters the join condition
    *
    * @return true if the equality join keys are the same and unique
    */
-  private static boolean areSelfJoinKeysUnique(
-      RelNode leftRel,
-      RelNode rightRel,
-      RexNode joinFilters) {
+  private static boolean areSelfJoinKeysUnique(RelMetadataQuery mq,
+      RelNode leftRel, RelNode rightRel, RexNode joinFilters) {
     final JoinInfo joinInfo = JoinInfo.of(leftRel, rightRel, joinFilters);
 
     // Make sure each key on the left maps to the same simple column as the
     // corresponding key on the right
     for (IntPair pair : joinInfo.pairs()) {
       final RelColumnOrigin leftOrigin =
-          RelMetadataQuery.getColumnOrigin(leftRel, pair.source);
+          mq.getColumnOrigin(leftRel, pair.source);
       if (leftOrigin == null) {
         return false;
       }
       final RelColumnOrigin rightOrigin =
-          RelMetadataQuery.getColumnOrigin(rightRel, pair.target);
+          mq.getColumnOrigin(rightRel, pair.target);
       if (rightOrigin == null) {
         return false;
       }
@@ -2053,7 +2056,7 @@ public class LoptOptimizeJoinRule extends RelOptRule {
     // are unique.  When removing self-joins, if needed, we'll later add an
     // IS NOT NULL filter on the join keys that are nullable.  Therefore,
     // it's ok if there are nulls in the unique key.
-    return RelMdUtil.areColumnsDefinitelyUniqueWhenNullsFiltered(leftRel,
+    return RelMdUtil.areColumnsDefinitelyUniqueWhenNullsFiltered(mq, leftRel,
         joinInfo.leftSet());
   }
 }

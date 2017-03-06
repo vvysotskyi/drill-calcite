@@ -19,6 +19,7 @@ package org.apache.calcite.util;
 import org.apache.calcite.linq4j.function.Function1;
 import org.apache.calcite.linq4j.function.Functions;
 import org.apache.calcite.runtime.FlatLists;
+import org.apache.calcite.util.mapping.Mappings;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
@@ -222,8 +223,12 @@ public class ImmutableIntList extends FlatLists.AbstractFlatList<Integer> {
     return -1;
   }
 
+  @Override public ImmutableIntList append(Integer e) {
+    return append((int) e);
+  }
+
   /** Returns a copy of this list with one element added. */
-  public ImmutableIntList add(int element) {
+  public ImmutableIntList append(int element) {
     if (ints.length == 0) {
       return of(element);
     }
@@ -246,7 +251,10 @@ public class ImmutableIntList extends FlatLists.AbstractFlatList<Integer> {
         });
   }
 
-  /** Returns the identity list [0, ..., count - 1]. */
+  /** Returns the identity list [0, ..., count - 1].
+   *
+   * @see Mappings#isIdentity(List, int)
+   */
   public static ImmutableIntList identity(int count) {
     final int[] integers = new int[count];
     for (int i = 0; i < integers.length; i++) {

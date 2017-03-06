@@ -21,9 +21,11 @@ import org.apache.calcite.rel.RelNode;
 
 import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
+import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableList;
 
 import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.util.HashMap;
@@ -129,14 +131,19 @@ public class CachingRelMetadataProvider implements RelMetadataProvider {
       }
 
       // Cache miss or stale.
-      Object result = method.invoke(metadata, args);
-      if (result != null) {
-        entry = new CacheEntry();
-        entry.timestamp = timestamp;
-        entry.result = result;
-        cache.put(key, entry);
+      try {
+        Object result = method.invoke(metadata, args);
+        if (result != null) {
+          entry = new CacheEntry();
+          entry.timestamp = timestamp;
+          entry.result = result;
+          cache.put(key, entry);
+        }
+        return result;
+      } catch (InvocationTargetException e) {
+        Throwables.propagateIfPossible(e.getCause());
+        throw e;
       }
-      return result;
     }
   }
 }

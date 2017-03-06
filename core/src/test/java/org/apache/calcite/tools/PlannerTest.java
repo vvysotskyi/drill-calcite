@@ -29,7 +29,6 @@ import org.apache.calcite.config.Lex;
 import org.apache.calcite.plan.Convention;
 import org.apache.calcite.plan.ConventionTraitDef;
 import org.apache.calcite.plan.RelOptCluster;
-import org.apache.calcite.plan.RelOptCost;
 import org.apache.calcite.plan.RelOptPlanner;
 import org.apache.calcite.plan.RelOptPredicateList;
 import org.apache.calcite.plan.RelOptRule;
@@ -279,8 +278,8 @@ public class PlannerTest {
     SqlNode parse = planner.parse(sql);
     SqlNode validate = planner.validate(parse);
     RelNode rel = planner.convert(validate);
-    final RelOptPredicateList predicates =
-        RelMetadataQuery.getPulledUpPredicates(rel);
+    final RelMetadataQuery mq = RelMetadataQuery.instance();
+    final RelOptPredicateList predicates = mq.getPulledUpPredicates(rel);
     final String buf = predicates.pulledUpPredicates.toString();
     assertThat(buf, equalTo(expectedPredicates));
   }
@@ -1189,9 +1188,9 @@ public class PlannerTest {
       return new PhysProj(getCluster(), traitSet, input, exps, rowType);
     }
 
-    public RelOptCost computeSelfCost(RelOptPlanner planner) {
-      return planner.getCostFactory().makeCost(1, 1, 1);
-    }
+//    public RelOptCost computeSelfCost(RelOptPlanner planner) {
+//      return planner.getCostFactory().makeCost(1, 1, 1);
+//    }
   }
 
   /** Physical Table RelNode */
@@ -1201,9 +1200,9 @@ public class PlannerTest {
       super(cluster, traitSet, table);
     }
 
-    public RelOptCost computeSelfCost(RelOptPlanner planner) {
-      return planner.getCostFactory().makeCost(1, 1, 1);
-    }
+//    public RelOptCost computeSelfCost(RelOptPlanner planner) {
+//      return planner.getCostFactory().makeCost(1, 1, 1);
+//    }
   }
 
 }

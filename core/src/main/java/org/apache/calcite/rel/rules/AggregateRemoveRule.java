@@ -21,6 +21,8 @@ import org.apache.calcite.plan.RelOptRuleCall;
 import org.apache.calcite.plan.RelOptUtil;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.logical.LogicalAggregate;
+import org.apache.calcite.rel.metadata.RelMetadataQuery;
+import org.apache.calcite.runtime.SqlFunctions;
 
 /**
  * Planner rule that removes
@@ -55,9 +57,11 @@ public class AggregateRemoveRule extends RelOptRule {
   public void onMatch(RelOptRuleCall call) {
     final LogicalAggregate aggregate = call.rel(0);
     final RelNode input = call.rel(1);
-    if (!aggregate.getAggCallList().isEmpty()
-        || aggregate.indicator
-        || !input.isKey(aggregate.getGroupSet())) {
+    if (!aggregate.getAggCallList().isEmpty() || aggregate.indicator) {
+      return;
+    }
+    final RelMetadataQuery mq = RelMetadataQuery.instance();
+    if (!SqlFunctions.isTrue(mq.areColumnsUnique(input, aggregate.getGroupSet()))) {
       return;
     }
     // Distinct is "GROUP BY c1, c2" (where c1, c2 are a set of columns on

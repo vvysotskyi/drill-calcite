@@ -27,6 +27,7 @@ import org.apache.calcite.rel.core.Union;
 import org.apache.calcite.rel.logical.LogicalAggregate;
 import org.apache.calcite.rel.logical.LogicalUnion;
 import org.apache.calcite.rel.metadata.RelMdUtil;
+import org.apache.calcite.rel.metadata.RelMetadataQuery;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.sql.SqlAggFunction;
 import org.apache.calcite.sql.SqlKind;
@@ -119,10 +120,10 @@ public class AggregateUnionTransposeRule extends RelOptRule {
 
     // create corresponding aggregates on top of each union child
     List<RelNode> newUnionInputs = new ArrayList<RelNode>();
+    final RelMetadataQuery mq = RelMetadataQuery.instance();
     for (RelNode input : union.getInputs()) {
       boolean alreadyUnique =
-          RelMdUtil.areColumnsDefinitelyUnique(
-              input,
+          RelMdUtil.areColumnsDefinitelyUnique(mq, input,
               aggRel.getGroupSet());
 
       if (alreadyUnique) {

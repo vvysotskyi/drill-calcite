@@ -179,7 +179,7 @@ public class VolcanoPlanner extends AbstractRelOptPlanner {
    * null VARCHAR(10).
    */
   private final Map<Pair<String, RelDataType>, RelNode> mapDigestToRel =
-      new HashMap<Pair<String, RelDataType>, RelNode>();
+      new HashMap<>();
 
   /**
    * Map each registered expression ({@link RelNode}) to its equivalence set
@@ -192,7 +192,7 @@ public class VolcanoPlanner extends AbstractRelOptPlanner {
    * to be careful, otherwise it gets incestuous.</p>
    */
   private final IdentityHashMap<RelNode, RelSubset> mapRel2Subset =
-      new IdentityHashMap<RelNode, RelSubset>();
+      new IdentityHashMap<>();
 
   /**
    * The importance of relational expressions.
@@ -204,13 +204,12 @@ public class VolcanoPlanner extends AbstractRelOptPlanner {
    * <p>If a RelNode has 0 importance, all {@link RelOptRuleCall}s using it
    * are ignored, and future RelOptRuleCalls are not queued up.
    */
-  final Map<RelNode, Double> relImportances = new HashMap<RelNode, Double>();
+  final Map<RelNode, Double> relImportances = new HashMap<>();
 
   /**
    * List of all schemas which have been registered.
    */
-  private final Set<RelOptSchema> registeredSchemas =
-      new HashSet<RelOptSchema>();
+  private final Set<RelOptSchema> registeredSchemas = new HashSet<>();
 
   /**
    * Holds rule calls waiting to be fired.
@@ -220,12 +219,12 @@ public class VolcanoPlanner extends AbstractRelOptPlanner {
   /**
    * Holds the currently registered RelTraitDefs.
    */
-  private final List<RelTraitDef> traitDefs = new ArrayList<RelTraitDef>();
+  private final List<RelTraitDef> traitDefs = new ArrayList<>();
 
   /**
    * Set of all registered rules.
    */
-  protected final Set<RelOptRule> ruleSet = new HashSet<RelOptRule>();
+  protected final Set<RelOptRule> ruleSet = new HashSet<>();
 
   private int nextSetId = 0;
 
@@ -260,11 +259,9 @@ public class VolcanoPlanner extends AbstractRelOptPlanner {
   private final Map<List<String>, RelOptLattice> latticeByName =
       Maps.newLinkedHashMap();
 
-  final Map<RelNode, Provenance> provenanceMap =
-      new HashMap<RelNode, Provenance>();
+  final Map<RelNode, Provenance> provenanceMap = new HashMap<>();
 
-  private final List<VolcanoRuleCall> ruleCallStack =
-      new ArrayList<VolcanoRuleCall>();
+  private final List<VolcanoRuleCall> ruleCallStack = new ArrayList<>();
 
   /** Zero cost, according to {@link #costFactory}. Not necessarily a
    * {@link org.apache.calcite.plan.volcano.VolcanoCost}. */
@@ -513,7 +510,7 @@ public class VolcanoPlanner extends AbstractRelOptPlanner {
   }
 
   private static Set<RelOptTable> findTables(RelNode rel) {
-    final Set<RelOptTable> usedTables = new LinkedHashSet<RelOptTable>();
+    final Set<RelOptTable> usedTables = new LinkedHashSet<>();
     new RelVisitor() {
       @Override public void visit(RelNode node, int ordinal, RelNode parent) {
         if (node instanceof TableScan) {
@@ -876,7 +873,7 @@ public class VolcanoPlanner extends AbstractRelOptPlanner {
   private String provenance(RelNode root) {
     final StringWriter sw = new StringWriter();
     final PrintWriter pw = new PrintWriter(sw);
-    final List<RelNode> nodes = new ArrayList<RelNode>();
+    final List<RelNode> nodes = new ArrayList<>();
     new RelVisitor() {
       public void visit(RelNode node, int ordinal, RelNode parent) {
         nodes.add(node);
@@ -884,7 +881,7 @@ public class VolcanoPlanner extends AbstractRelOptPlanner {
       }
       // CHECKSTYLE: IGNORE 1
     }.go(root);
-    final Set<RelNode> visited = new HashSet<RelNode>();
+    final Set<RelNode> visited = new HashSet<>();
     for (RelNode node : nodes) {
       provenanceRecurse(pw, node, 0, visited);
     }
@@ -932,8 +929,7 @@ public class VolcanoPlanner extends AbstractRelOptPlanner {
     RelVisitor visitor =
         new RelVisitor() {
           int depth = 0;
-
-          HashSet<RelSubset> visitedSubsets = new HashSet<RelSubset>();
+          final Set<RelSubset> visitedSubsets = new HashSet<>();
 
           public void visit(
               RelNode p,
@@ -973,7 +969,7 @@ public class VolcanoPlanner extends AbstractRelOptPlanner {
    * {@link Convention#NONE} and boosts their importance by 25%.
    */
   private void injectImportanceBoost() {
-    HashSet<RelSubset> requireBoost = new HashSet<RelSubset>();
+    final Set<RelSubset> requireBoost = new HashSet<>();
 
   SUBSET_LOOP:
     for (RelSubset subset : ruleQueue.subsetImportances.keySet()) {
@@ -1042,6 +1038,7 @@ public class VolcanoPlanner extends AbstractRelOptPlanner {
    * Checks internal consistency.
    */
   protected void validate() {
+    final RelMetadataQuery mq = RelMetadataQuery.instance();
     for (RelSet set : allSets) {
       if (set.equivalentSet != null) {
         throw new AssertionError(
@@ -1055,7 +1052,7 @@ public class VolcanoPlanner extends AbstractRelOptPlanner {
               + "] is in wrong set [" + set + "]");
         }
         for (RelNode rel : subset.getRels()) {
-          RelOptCost relCost = getCost(rel);
+          RelOptCost relCost = getCost(rel, mq);
           if (relCost.isLt(subset.bestCost)) {
             throw new AssertionError(
                 "rel [" + rel.getDescription()
@@ -1100,7 +1097,7 @@ public class VolcanoPlanner extends AbstractRelOptPlanner {
     }
   }
 
-  public RelOptCost getCost(RelNode rel) {
+  public RelOptCost getCost(RelNode rel, RelMetadataQuery mq) {
     assert rel != null : "pre-condition: rel != null";
     if (rel instanceof RelSubset) {
       return ((RelSubset) rel).bestCost;
@@ -1109,13 +1106,13 @@ public class VolcanoPlanner extends AbstractRelOptPlanner {
         == Convention.NONE) {
       return costFactory.makeInfiniteCost();
     }
-    RelOptCost cost = RelMetadataQuery.getNonCumulativeCost(rel);
+    RelOptCost cost = mq.getNonCumulativeCost(rel);
     if (!zeroCost.isLt(cost)) {
       // cost must be positive, so nudge it
       cost = costFactory.makeTinyCost();
     }
     for (RelNode input : rel.getInputs()) {
-      cost = cost.plus(getCost(input));
+      cost = cost.plus(getCost(input, mq));
     }
     return cost;
   }
@@ -1323,6 +1320,7 @@ public class VolcanoPlanner extends AbstractRelOptPlanner {
    * @see #normalizePlan(String)
    */
   public void dump(PrintWriter pw) {
+    final RelMetadataQuery mq = RelMetadataQuery.instance();
     pw.println("Root: " + root.getDescription());
     pw.println("Original rel:");
     pw.println(originalRootString);
@@ -1377,8 +1375,8 @@ public class VolcanoPlanner extends AbstractRelOptPlanner {
           if (importance != null) {
             pw.print(", importance=" + importance);
           }
-          pw.print(", rowcount=" + RelMetadataQuery.getRowCount(rel));
-          pw.println(", cumulative cost=" + getCost(rel));
+          pw.print(", rowcount=" + mq.getRowCount(rel));
+          pw.println(", cumulative cost=" + getCost(rel, mq));
         }
       }
     }
@@ -1639,6 +1637,7 @@ public class VolcanoPlanner extends AbstractRelOptPlanner {
     // implements the interface required by its calling convention.
     final RelTraitSet traits = rel.getTraitSet();
     final Convention convention = traits.getTrait(ConventionTraitDef.INSTANCE);
+    assert convention != null;
     if (!convention.getInterface().isInstance(rel)
         && !(rel instanceof Converter)) {
       throw Util.newInternal(
@@ -1824,7 +1823,8 @@ public class VolcanoPlanner extends AbstractRelOptPlanner {
     // 100. We think this happens because the back-links to parents are
     // not established. So, give the subset another change to figure out
     // its cost.
-    subset.propagateCostImprovements(this, rel, new HashSet<RelSubset>());
+    final RelMetadataQuery mq = RelMetadataQuery.instance();
+    subset.propagateCostImprovements(this, mq, rel, new HashSet<RelSubset>());
 
     return subset;
   }

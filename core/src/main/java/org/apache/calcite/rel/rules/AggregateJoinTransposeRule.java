@@ -155,8 +155,9 @@ public class AggregateJoinTransposeRule extends RelOptRule {
 
     // Do the columns used by the join appear in the output of the aggregate?
     final ImmutableBitSet aggregateColumns = aggregate.getGroupSet();
+    final RelMetadataQuery mq = RelMetadataQuery.instance();
     final ImmutableBitSet keyColumns = keyColumns(aggregateColumns,
-        RelMetadataQuery.getPulledUpPredicates(join).pulledUpPredicates);
+        mq.getPulledUpPredicates(join).pulledUpPredicates);
     final ImmutableBitSet joinColumns =
         RelOptUtil.InputFinder.bits(join.getCondition());
     final boolean allColumnsInAggregate =
@@ -215,7 +216,7 @@ public class AggregateJoinTransposeRule extends RelOptRule {
         unique = true;
       } else {
         final Boolean unique0 =
-            RelMetadataQuery.areColumnsUnique(joinInput, belowAggregateKey);
+            mq.areColumnsUnique(joinInput, belowAggregateKey);
         unique = unique0 != null && unique0;
       }
       if (unique) {

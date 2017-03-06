@@ -23,6 +23,7 @@ import org.apache.calcite.plan.RelTraitSet;
 import org.apache.calcite.rel.BiRel;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.RelWriter;
+import org.apache.calcite.rel.metadata.RelMdUtil;
 import org.apache.calcite.rel.metadata.RelMetadataQuery;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
@@ -32,6 +33,7 @@ import org.apache.calcite.rex.RexNode;
 import org.apache.calcite.rex.RexShuttle;
 import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.sql.validate.SqlValidatorUtil;
+import org.apache.calcite.util.Util;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
@@ -154,27 +156,24 @@ public abstract class Join extends BiRel {
     return true;
   }
 
-  // implement RelNode
-  public RelOptCost computeSelfCost(RelOptPlanner planner) {
+  @Override public RelOptCost computeSelfCost(RelOptPlanner planner,
+      RelMetadataQuery mq) {
     // REVIEW jvs 9-Apr-2006:  Just for now...
-    double rowCount = RelMetadataQuery.getRowCount(this);
+    double rowCount = mq.getRowCount(this);
     return planner.getCostFactory().makeCost(rowCount, 0, 0);
   }
 
+  /** @deprecated Use {@link RelMdUtil#getJoinRowCount(RelMetadataQuery, Join, RexNode)}. */
+  @Deprecated // to be removed before 2.0
   public static double estimateJoinedRows(
       Join joinRel,
       RexNode condition) {
-    double product =
-        RelMetadataQuery.getRowCount(joinRel.getLeft())
-            * RelMetadataQuery.getRowCount(joinRel.getRight());
-
-    // TODO:  correlation factor
-    return product * RelMetadataQuery.getSelectivity(joinRel, condition);
+    final RelMetadataQuery mq = RelMetadataQuery.instance();
+    return Util.first(RelMdUtil.getJoinRowCount(mq, joinRel, condition), 1D);
   }
 
-  // implement RelNode
-  public double getRows() {
-    return estimateJoinedRows(this, condition);
+  @Override public double estimateRowCount(RelMetadataQuery mq) {
+    return Util.first(RelMdUtil.getJoinRowCount(mq, this, condition), 1D);
   }
 
   public Set<String> getVariablesStopped() {

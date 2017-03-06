@@ -23,11 +23,16 @@ import org.apache.calcite.rel.core.Aggregate;
 import org.apache.calcite.rel.core.Correlate;
 import org.apache.calcite.rel.core.Exchange;
 import org.apache.calcite.rel.core.Filter;
+import org.apache.calcite.rel.core.Intersect;
 import org.apache.calcite.rel.core.Join;
 import org.apache.calcite.rel.core.JoinInfo;
+import org.apache.calcite.rel.core.Minus;
 import org.apache.calcite.rel.core.Project;
 import org.apache.calcite.rel.core.SemiJoin;
+import org.apache.calcite.rel.core.SetOp;
 import org.apache.calcite.rel.core.Sort;
+import org.apache.calcite.rel.core.TableScan;
+import org.apache.calcite.rel.core.Values;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.rex.RexCall;
@@ -45,7 +50,8 @@ import java.util.List;
  * RelMdColumnUniqueness supplies a default implementation of
  * {@link RelMetadataQuery#areColumnsUnique} for the standard logical algebra.
  */
-public class RelMdColumnUniqueness {
+public class RelMdColumnUniqueness
+    implements MetadataHandler<BuiltInMetadata.ColumnUniqueness> {
   public static final RelMetadataProvider SOURCE =
       ReflectiveRelMetadataProvider.reflectiveSource(
           BuiltInMethod.COLUMN_UNIQUENESS.method, new RelMdColumnUniqueness());
@@ -56,50 +62,88 @@ public class RelMdColumnUniqueness {
 
   //~ Methods ----------------------------------------------------------------
 
-  public Boolean areColumnsUnique(
-      Filter rel,
-      ImmutableBitSet columns,
-      boolean ignoreNulls) {
-    return RelMetadataQuery.areColumnsUnique(
-        rel.getInput(),
-        columns,
-        ignoreNulls);
+  public MetadataDef<BuiltInMetadata.ColumnUniqueness> getDef() {
+    return BuiltInMetadata.ColumnUniqueness.DEF;
+  }
+  public Boolean areColumnsUnique(TableScan rel, RelMetadataQuery mq,
+      ImmutableBitSet columns, boolean ignoreNulls) {
+    return rel.getTable().isKey(columns);
   }
 
-  public Boolean areColumnsUnique(
-      Sort rel,
-      ImmutableBitSet columns,
-      boolean ignoreNulls) {
-    return RelMetadataQuery.areColumnsUnique(
-        rel.getInput(),
-        columns,
-        ignoreNulls);
+  public Boolean areColumnsUnique(Filter rel, RelMetadataQuery mq,
+      ImmutableBitSet columns, boolean ignoreNulls) {
+    return mq.areColumnsUnique(rel.getInput(), columns, ignoreNulls);
   }
 
-  public Boolean areColumnsUnique(
-      Exchange rel,
-      ImmutableBitSet columns,
-      boolean ignoreNulls) {
-    return RelMetadataQuery.areColumnsUnique(
-        rel.getInput(),
-        columns,
-        ignoreNulls);
+  /** Catch-all implementation for
+   * {@link BuiltInMetadata.ColumnUniqueness#areColumnsUnique(ImmutableBitSet, boolean)},
+   * invoked using reflection, for any relational expression not
+   * handled by a more specific method.
+   *
+   * @param rel Relational expression
+   * @param mq Metadata query
+   * @param columns column mask representing the subset of columns for which
+   *                uniqueness will be determined
+   * @param ignoreNulls if true, ignore null values when determining column
+   *                    uniqueness
+   * @return whether the columns are unique, or
+   * null if not enough information is available to make that determination
+   *
+   * @see org.apache.calcite.rel.metadata.RelMetadataQuery#areColumnsUnique(RelNode, ImmutableBitSet, boolean)
+   */
+  public Boolean areColumnsUnique(RelNode rel, RelMetadataQuery mq,
+      ImmutableBitSet columns, boolean ignoreNulls) {
+    // no information available
+    return null;
   }
 
-  public Boolean areColumnsUnique(
-      Correlate rel,
-      ImmutableBitSet columns,
-      boolean ignoreNulls) {
-    return RelMetadataQuery.areColumnsUnique(
-        rel.getLeft(),
-        columns,
-        ignoreNulls);
+  public Boolean areColumnsUnique(SetOp rel, RelMetadataQuery mq,
+      ImmutableBitSet columns, boolean ignoreNulls) {
+    // If not ALL then the rows are distinct.
+    // Therefore the set of all columns is a key.
+    return !rel.all
+        && columns.nextClearBit(0) >= rel.getRowType().getFieldCount();
   }
 
-  public Boolean areColumnsUnique(
-      Project rel,
-      ImmutableBitSet columns,
-      boolean ignoreNulls) {
+  public Boolean areColumnsUnique(Intersect rel, RelMetadataQuery mq,
+      ImmutableBitSet columns, boolean ignoreNulls) {
+    if (areColumnsUnique((SetOp) rel, mq, columns, ignoreNulls)) {
+      return true;
+    }
+    for (RelNode input : rel.getInputs()) {
+      Boolean b = mq.areColumnsUnique(input, columns, ignoreNulls);
+      if (b != null && b) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  public Boolean areColumnsUnique(Minus rel, RelMetadataQuery mq,
+      ImmutableBitSet columns, boolean ignoreNulls) {
+    if (areColumnsUnique((SetOp) rel, mq, columns, ignoreNulls)) {
+      return true;
+    }
+    return mq.areColumnsUnique(rel.getInput(0), columns, ignoreNulls);
+  }
+
+  public Boolean areColumnsUnique(Sort rel, RelMetadataQuery mq,
+      ImmutableBitSet columns, boolean ignoreNulls) {
+    return mq.areColumnsUnique(rel.getInput(), columns, ignoreNulls);
+  }
+
+  public Boolean areColumnsUnique(Exchange rel, RelMetadataQuery mq,
+      ImmutableBitSet columns, boolean ignoreNulls) {
+    return mq.areColumnsUnique(rel.getInput(), columns, ignoreNulls);
+  }
+
+  public Boolean areColumnsUnique(Correlate rel, RelMetadataQuery mq,
+      ImmutableBitSet columns, boolean ignoreNulls) {
+    return mq.areColumnsUnique(rel.getLeft(), columns, ignoreNulls);
+  }
+
+  public Boolean areColumnsUnique(Project rel, RelMetadataQuery mq,
+      ImmutableBitSet columns, boolean ignoreNulls) {
     // LogicalProject maps a set of rows to a different set;
     // Without knowledge of the mapping function(whether it
     // preserves uniqueness), it is only safe to derive uniqueness
@@ -151,16 +195,12 @@ public class RelMdColumnUniqueness {
       return null;
     }
 
-    return RelMetadataQuery.areColumnsUnique(
-        rel.getInput(),
-        childColumns.build(),
+    return mq.areColumnsUnique(rel.getInput(), childColumns.build(),
         ignoreNulls);
   }
 
-  public Boolean areColumnsUnique(
-      Join rel,
-      ImmutableBitSet columns,
-      boolean ignoreNulls) {
+  public Boolean areColumnsUnique(Join rel, RelMetadataQuery mq,
+      ImmutableBitSet columns, boolean ignoreNulls) {
     if (columns.cardinality() == 0) {
       return false;
     }
@@ -185,11 +225,9 @@ public class RelMdColumnUniqueness {
     // right hand side, then the columns are unique if and only if they're
     // unique for their respective join inputs
     final ImmutableBitSet leftColumns = leftBuilder.build();
-    Boolean leftUnique =
-        RelMetadataQuery.areColumnsUnique(left, leftColumns, ignoreNulls);
+    Boolean leftUnique = mq.areColumnsUnique(left, leftColumns, ignoreNulls);
     final ImmutableBitSet rightColumns = rightBuilder.build();
-    Boolean rightUnique =
-        RelMetadataQuery.areColumnsUnique(right, rightColumns, ignoreNulls);
+    Boolean rightUnique = mq.areColumnsUnique(right, rightColumns, ignoreNulls);
     if ((leftColumns.cardinality() > 0)
         && (rightColumns.cardinality() > 0)) {
       if ((leftUnique == null) || (rightUnique == null)) {
@@ -211,8 +249,7 @@ public class RelMdColumnUniqueness {
         return false;
       }
       Boolean rightJoinColsUnique =
-          RelMetadataQuery.areColumnsUnique(right, joinInfo.rightSet(),
-              ignoreNulls);
+          mq.areColumnsUnique(right, joinInfo.rightSet(), ignoreNulls);
       if ((rightJoinColsUnique == null) || (leftUnique == null)) {
         return null;
       }
@@ -222,8 +259,7 @@ public class RelMdColumnUniqueness {
         return false;
       }
       Boolean leftJoinColsUnique =
-          RelMetadataQuery.areColumnsUnique(left, joinInfo.leftSet(),
-              ignoreNulls);
+          mq.areColumnsUnique(left, joinInfo.leftSet(), ignoreNulls);
       if ((leftJoinColsUnique == null) || (rightUnique == null)) {
         return null;
       }
@@ -233,22 +269,15 @@ public class RelMdColumnUniqueness {
     throw new AssertionError();
   }
 
-  public Boolean areColumnsUnique(
-      SemiJoin rel,
-      ImmutableBitSet columns,
-      boolean ignoreNulls) {
+  public Boolean areColumnsUnique(SemiJoin rel, RelMetadataQuery mq,
+      ImmutableBitSet columns, boolean ignoreNulls) {
     // only return the unique keys from the LHS since a semijoin only
     // returns the LHS
-    return RelMetadataQuery.areColumnsUnique(
-        rel.getLeft(),
-        columns,
-        ignoreNulls);
+    return mq.areColumnsUnique(rel.getLeft(), columns, ignoreNulls);
   }
 
-  public Boolean areColumnsUnique(
-      Aggregate rel,
-      ImmutableBitSet columns,
-      boolean ignoreNulls) {
+  public Boolean areColumnsUnique(Aggregate rel, RelMetadataQuery mq,
+      ImmutableBitSet columns, boolean ignoreNulls) {
     // group by keys form a unique key
     ImmutableBitSet groupKey = ImmutableBitSet.range(rel.getGroupCount());
     return columns.contains(groupKey);
@@ -263,33 +292,33 @@ public class RelMdColumnUniqueness {
     return null;
   }
 
-  public Boolean areColumnsUnique(
-      boolean dummy, // prevent method from being used
-      HepRelVertex rel,
-      ImmutableBitSet columns,
-      boolean ignoreNulls) {
-    return RelMetadataQuery.areColumnsUnique(
-        rel.getCurrentRel(),
-        columns,
-        ignoreNulls);
+  public Boolean areColumnsUnique(HepRelVertex rel, RelMetadataQuery mq,
+                                  boolean dummy, // prevent method from being used
+                                  ImmutableBitSet columns, boolean ignoreNulls) {
+    return mq.areColumnsUnique(rel.getCurrentRel(), columns, ignoreNulls);
   }
 
-  public Boolean areColumnsUnique(
-      boolean dummy, // prevent method from being used
-      RelSubset rel,
-      ImmutableBitSet columns,
-      boolean ignoreNulls) {
+  public Boolean areColumnsUnique(RelSubset rel, RelMetadataQuery mq,
+      ImmutableBitSet columns, boolean ignoreNulls) {
     int nullCount = 0;
     for (RelNode rel2 : rel.getRels()) {
-      if (rel2 instanceof Aggregate || simplyProjects(rel2, columns)) {
-        final Boolean unique =
-            RelMetadataQuery.areColumnsUnique(rel2, columns, ignoreNulls);
-        if (unique != null) {
-          if (unique) {
-            return true;
+      if (rel2 instanceof Aggregate
+          || rel2 instanceof Filter
+          || rel2 instanceof Values
+          || rel2 instanceof TableScan
+          || simplyProjects(rel2, columns)) {
+        try {
+          final Boolean unique = mq.areColumnsUnique(rel2, columns, ignoreNulls);
+          if (unique != null) {
+            if (unique) {
+              return true;
+            }
+          } else {
+            ++nullCount;
           }
-        } else {
-          ++nullCount;
+        } catch (CyclicMetadataException e) {
+          // Ignore this relational expression; there will be non-cyclic ones
+          // in this set.
         }
       }
     }

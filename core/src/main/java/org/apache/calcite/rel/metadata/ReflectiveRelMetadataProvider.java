@@ -17,26 +17,33 @@
 package org.apache.calcite.rel.metadata;
 
 import org.apache.calcite.rel.RelNode;
+import org.apache.calcite.rex.RexNode;
+import org.apache.calcite.runtime.FlatLists;
 import org.apache.calcite.util.BuiltInMethod;
 import org.apache.calcite.util.ImmutableNullableList;
 import org.apache.calcite.util.Pair;
 import org.apache.calcite.util.ReflectiveVisitor;
 import org.apache.calcite.util.Util;
 
-import com.google.common.base.Function;
+import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
-import com.google.common.collect.Sets;
+import com.google.common.collect.ImmutableMap;
 
 import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.lang.reflect.Proxy;
+import java.lang.reflect.UndeclaredThrowableException;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 /**
  * Implementation of the {@link RelMetadataProvider} interface that dispatches
@@ -54,8 +61,9 @@ public class ReflectiveRelMetadataProvider
     implements RelMetadataProvider, ReflectiveVisitor {
 
   //~ Instance fields --------------------------------------------------------
-  private final Map<Class<RelNode>, Function<RelNode, Metadata>> map;
-  private final Class<?> metadataClass0;
+  private final ConcurrentMap<Class<RelNode>, UnboundMetadata> map;
+  private final Class<? extends Metadata> metadataClass0;
+  private final ImmutableMap<Method, MetadataHandler> handlerMap;
 
   //~ Constructors -----------------------------------------------------------
 
@@ -64,13 +72,16 @@ public class ReflectiveRelMetadataProvider
    *
    * @param map Map
    * @param metadataClass0 Metadata class
+   * @param handlerMap Methods handled and the objects to call them on
    */
   protected ReflectiveRelMetadataProvider(
-      Map<Class<RelNode>, Function<RelNode, Metadata>> map,
-      Class<?> metadataClass0) {
+    ConcurrentMap<Class<RelNode>, UnboundMetadata> map,
+    Class<? extends Metadata> metadataClass0,
+    Map<Method, MetadataHandler> handlerMap) {
     assert !map.isEmpty() : "are your methods named wrong?";
     this.map = map;
     this.metadataClass0 = metadataClass0;
+    this.handlerMap = ImmutableMap.copyOf(handlerMap);
   }
 
   /** Returns an implementation of {@link RelMetadataProvider} that scans for
@@ -91,134 +102,125 @@ public class ReflectiveRelMetadataProvider
    * or {@link org.apache.calcite.rel.core.Filter}.</p>
    */
   public static RelMetadataProvider reflectiveSource(Method method,
-      Object target) {
+                                                     MetadataHandler target) {
     return reflectiveSource(target, ImmutableList.of(method));
   }
 
   /** Returns a reflective metadata provider that implements several
    * methods. */
-  public static RelMetadataProvider reflectiveSource(Object target,
+  public static RelMetadataProvider reflectiveSource(MetadataHandler target,
       Method... methods) {
     return reflectiveSource(target, ImmutableList.copyOf(methods));
   }
 
-  private static RelMetadataProvider reflectiveSource(final Object target,
-      final ImmutableList<Method> methods) {
-    assert methods.size() > 0;
-    final Method method0 = methods.get(0);
-    final Class<?> metadataClass0 = method0.getDeclaringClass();
-    assert Metadata.class.isAssignableFrom(metadataClass0);
-    for (Method method : methods) {
-      assert method.getDeclaringClass() == metadataClass0;
-    }
+  private static RelMetadataProvider
+  reflectiveSource(final MetadataHandler target,
+                   final ImmutableList<Method> methods) {
+    final Space2 space = Space2.create(target, methods);
 
-    // Find the distinct set of RelNode classes handled by this provider,
-    // ordered base-class first.
-    final Set<Class<RelNode>> classes = Sets.newHashSet();
-    final Map<Pair<Class<RelNode>, Method>, Method> handlerMap =
-        Maps.newHashMap();
-    for (final Method handlerMethod : target.getClass().getMethods()) {
-      for (Method method : methods) {
-        if (couldImplement(handlerMethod, method)) {
-          @SuppressWarnings("unchecked") final Class<RelNode> relNodeClass =
-              (Class<RelNode>) handlerMethod.getParameterTypes()[0];
-          classes.add(relNodeClass);
-          handlerMap.put(Pair.of(relNodeClass, method), handlerMethod);
-        }
-      }
-    }
-
-    final Map<Class<RelNode>, Function<RelNode, Metadata>> methodsMap =
-        Maps.newHashMap();
-    for (Class<RelNode> key : classes) {
+    // This needs to be a concurrent map since RelMetadataProvider are cached in static
+    // fields, thus the map is subject to concurrent modifications later.
+    // See map.put in org.apache.calcite.rel.metadata.ReflectiveRelMetadataProvider.apply(
+    // java.lang.Class<? extends org.apache.calcite.rel.RelNode>)
+    final ConcurrentMap<Class<RelNode>, UnboundMetadata> methodsMap = new ConcurrentHashMap<>();
+    for (Class<RelNode> key : space.classes) {
       ImmutableNullableList.Builder<Method> builder =
           ImmutableNullableList.builder();
       for (final Method method : methods) {
-        builder.add(find(handlerMap, key, method));
+        builder.add(space.find(key, method));
       }
       final List<Method> handlerMethods = builder.build();
-      final Function<RelNode, Metadata> function =
-          new Function<RelNode, Metadata>() {
-            public Metadata apply(final RelNode rel) {
-              return (Metadata) Proxy.newProxyInstance(
-                  metadataClass0.getClassLoader(),
-                  new Class[]{metadataClass0},
-                  new InvocationHandler() {
-                    public Object invoke(Object proxy, Method method,
-                        Object[] args) throws Throwable {
-                      // Suppose we are an implementation of Selectivity
-                      // that wraps "filter", a LogicalFilter. Then we
-                      // implement
-                      //   Selectivity.selectivity(rex)
-                      // by calling method
-                      //   new SelectivityImpl().selectivity(filter, rex)
-                      if (method.equals(
-                          BuiltInMethod.METADATA_REL.method)) {
-                        return rel;
+      final UnboundMetadata function =
+        new UnboundMetadata() {
+          public Metadata bind(final RelNode rel,
+                               final RelMetadataQuery mq) {
+            return (Metadata) Proxy.newProxyInstance(
+              space.metadataClass0.getClassLoader(),
+              new Class[]{space.metadataClass0},
+              new InvocationHandler() {
+                public Object invoke(Object proxy, Method method,
+                                     Object[] args) throws Throwable {
+                  // Suppose we are an implementation of Selectivity
+                  // that wraps "filter", a LogicalFilter. Then we
+                  // implement
+                  //   Selectivity.selectivity(rex)
+                  // by calling method
+                  //   new SelectivityImpl().selectivity(filter, rex)
+                  if (method.equals(
+                    BuiltInMethod.METADATA_REL.method)) {
+                    return rel;
+                  }
+                  if (method.equals(
+                    BuiltInMethod.OBJECT_TO_STRING.method)) {
+                    return space.metadataClass0.getSimpleName() + "(" + rel
+                      + ")";
+                  }
+                  int i = methods.indexOf(method);
+                  if (i < 0) {
+                    throw new AssertionError("not handled: " + method
+                      + " for " + rel);
+                  }
+                  final Method handlerMethod = handlerMethods.get(i);
+                  if (handlerMethod == null) {
+                    throw new AssertionError("not handled: " + method
+                      + " for " + rel);
+                  }
+                  final Object[] args1;
+                  final List key;
+                  if (args == null) {
+                    args1 = new Object[]{rel, mq};
+                    key = FlatLists.of(rel, method);
+                  } else {
+                    args1 = new Object[args.length + 2];
+                    args1[0] = rel;
+                    args1[1] = mq;
+                    System.arraycopy(args, 0, args1, 2, args.length);
+
+                    final Object[] args2 = args1.clone();
+                    args2[1] = method; // replace RelMetadataQuery with method
+                    for (int j = 0; j < args2.length; j++) {
+                      if (args2[j] == null) {
+                        args2[j] = NullSentinel.INSTANCE;
+                      } else if (args2[j] instanceof RexNode) {
+                        // Can't use RexNode.equals - it is not deep
+                        args2[j] = args2[j].toString();
                       }
-                      if (method.equals(
-                          BuiltInMethod.OBJECT_TO_STRING.method)) {
-                        return metadataClass0.getSimpleName() + "(" + rel
-                            + ")";
-                      }
-                      int i = methods.indexOf(method);
-                      if (i < 0) {
-                        throw new AssertionError("not handled: " + method
-                            + " for " + rel);
-                      }
-                      final Object[] args1;
-                      if (args == null) {
-                        args1 = new Object[]{rel};
-                      } else {
-                        args1 = new Object[args.length + 1];
-                        args1[0] = rel;
-                        System.arraycopy(args, 0, args1, 1, args.length);
-                      }
-                      final Method handlerMethod = handlerMethods.get(i);
-                      if (handlerMethod == null) {
-                        throw new AssertionError("not handled: " + method
-                            + " for " + rel);
-                      }
-                      return handlerMethod.invoke(target, args1);
                     }
-                  });
-            }
-          };
+                    key = FlatLists.copyOf(args2);
+                  }
+                  if (mq.map.put(key, NullSentinel.INSTANCE) != null) {
+                    throw CyclicMetadataException.INSTANCE;
+                  }
+                  try {
+                    return handlerMethod.invoke(target, args1);
+                  } catch (InvocationTargetException
+                    | UndeclaredThrowableException e) {
+                    Throwables.propagateIfPossible(e.getCause());
+                    throw e;
+                  } finally {
+                    mq.map.remove(key);
+                  }
+                }
+              });
+          }
+        };
       methodsMap.put(key, function);
     }
-    return new ReflectiveRelMetadataProvider(methodsMap, metadataClass0);
+    return new ReflectiveRelMetadataProvider(methodsMap, space.metadataClass0,
+      space.providerMap);
   }
 
-  /** Finds an implementation of a method for {@code relNodeClass} or its
-   * nearest base class. Assumes that base classes have already been added to
-   * {@code map}. */
-  @SuppressWarnings({ "unchecked", "SuspiciousMethodCalls" })
-  private static Method find(Map<Pair<Class<RelNode>, Method>,
-      Method> handlerMap, Class<RelNode> relNodeClass, Method method) {
-    List<Class<RelNode>> newSources = Lists.newArrayList();
-    Method implementingMethod;
-    while (relNodeClass != null) {
-      implementingMethod = handlerMap.get(Pair.of(relNodeClass, method));
-      if (implementingMethod != null) {
-        return implementingMethod;
-      } else {
-        newSources.add(relNodeClass);
-      }
-      for (Class<?> clazz : relNodeClass.getInterfaces()) {
-        if (RelNode.class.isAssignableFrom(clazz)) {
-          implementingMethod = handlerMap.get(Pair.of(clazz, method));
-          if (implementingMethod != null) {
-            return implementingMethod;
-          }
-        }
-      }
-      if (RelNode.class.isAssignableFrom(relNodeClass.getSuperclass())) {
-        relNodeClass = (Class<RelNode>) relNodeClass.getSuperclass();
-      } else {
-        relNodeClass = null;
+  public <M extends Metadata> Map<Method, MetadataHandler<M>>
+  handlers(MetadataDef<M> def) {
+    final ImmutableMap.Builder<Method, MetadataHandler<M>> builder =
+      ImmutableMap.builder();
+    for (Map.Entry<Method, MetadataHandler> entry : handlerMap.entrySet()) {
+      if (def.methods.contains(entry.getKey())) {
+        //noinspection unchecked
+        builder.put(entry.getKey(), entry.getValue());
       }
     }
-    return null;
+    return builder.build();
   }
 
   private static boolean couldImplement(Method handlerMethod, Method method) {
@@ -229,19 +231,18 @@ public class ReflectiveRelMetadataProvider
     }
     final Class<?>[] parameterTypes1 = handlerMethod.getParameterTypes();
     final Class<?>[] parameterTypes = method.getParameterTypes();
-    if (parameterTypes1.length != parameterTypes.length + 1
-        || !RelNode.class.isAssignableFrom(parameterTypes1[0])) {
-      return false;
-    }
-    return Util.skip(Arrays.asList(parameterTypes1))
-        .equals(Arrays.asList(parameterTypes));
+    return parameterTypes1.length == parameterTypes.length + 2
+        && RelNode.class.isAssignableFrom(parameterTypes1[0])
+        && RelMetadataQuery.class == parameterTypes1[1]
+        && Arrays.asList(parameterTypes)
+          .equals(Util.skip(Arrays.asList(parameterTypes1), 2));
   }
 
   //~ Methods ----------------------------------------------------------------
 
-  public Function<RelNode, Metadata> apply(
-      Class<? extends RelNode> relClass,
-      Class<? extends Metadata> metadataClass) {
+  public <M extends Metadata> UnboundMetadata<M>
+  apply(Class<? extends RelNode> relClass,
+        Class<? extends M> metadataClass) {
     if (metadataClass == metadataClass0) {
       return apply(relClass);
     } else {
@@ -250,11 +251,11 @@ public class ReflectiveRelMetadataProvider
   }
 
   @SuppressWarnings({ "unchecked", "SuspiciousMethodCalls" })
-  private synchronized Function<RelNode, Metadata> apply(
-      Class<? extends RelNode> relClass) {
-    List<Class<? extends RelNode>> newSources = Lists.newArrayList();
+  public <M extends Metadata> UnboundMetadata<M>
+  apply(Class<? extends RelNode> relClass) {
+    List<Class<? extends RelNode>> newSources = new ArrayList<>();
     for (;;) {
-      final Function<RelNode, Metadata> function = map.get(relClass);
+      UnboundMetadata<M> function = map.get(relClass);
       if (function != null) {
         for (@SuppressWarnings("rawtypes") Class clazz : newSources) {
           map.put(clazz, function);
@@ -265,7 +266,7 @@ public class ReflectiveRelMetadataProvider
       }
       for (Class<?> interfaceClass : relClass.getInterfaces()) {
         if (RelNode.class.isAssignableFrom(interfaceClass)) {
-          final Function<RelNode, Metadata> function2 = map.get(interfaceClass);
+          final UnboundMetadata<M> function2 = map.get(interfaceClass);
           if (function2 != null) {
             for (@SuppressWarnings("rawtypes") Class clazz : newSources) {
               map.put(clazz, function2);
@@ -279,6 +280,91 @@ public class ReflectiveRelMetadataProvider
       } else {
         return null;
       }
+    }
+  }
+
+  /** Workspace for computing which methods can act as handlers for
+   * given metadata methods. */
+  static class Space {
+    final Set<Class<RelNode>> classes = new HashSet<>();
+    final Map<Pair<Class<RelNode>, Method>, Method> handlerMap = new HashMap<>();
+    final ImmutableMap<Method, MetadataHandler> providerMap;
+
+    Space(Map<Method, MetadataHandler> providerMap) {
+      this.providerMap = ImmutableMap.copyOf(providerMap);
+
+      // Find the distinct set of RelNode classes handled by this provider,
+      // ordered base-class first.
+      for (Map.Entry<Method, MetadataHandler> entry : providerMap.entrySet()) {
+        final Method method = entry.getKey();
+        final MetadataHandler provider = entry.getValue();
+        for (final Method handlerMethod : provider.getClass().getMethods()) {
+          if (couldImplement(handlerMethod, method)) {
+            @SuppressWarnings("unchecked") final Class<RelNode> relNodeClass =
+              (Class<RelNode>) handlerMethod.getParameterTypes()[0];
+            classes.add(relNodeClass);
+            handlerMap.put(Pair.of(relNodeClass, method), handlerMethod);
+          }
+        }
+      }
+    }
+
+    /** Finds an implementation of a method for {@code relNodeClass} or its
+     * nearest base class. Assumes that base classes have already been added to
+     * {@code map}. */
+    @SuppressWarnings({ "unchecked", "SuspiciousMethodCalls" })
+    Method find(Class<? extends RelNode> relNodeClass, Method method) {
+      Method implementingMethod;
+      while (relNodeClass != null) {
+        implementingMethod = handlerMap.get(Pair.of(relNodeClass, method));
+        if (implementingMethod != null) {
+          return implementingMethod;
+        }
+        for (Class<?> clazz : relNodeClass.getInterfaces()) {
+          if (RelNode.class.isAssignableFrom(clazz)) {
+            implementingMethod = handlerMap.get(Pair.of(clazz, method));
+            if (implementingMethod != null) {
+              return implementingMethod;
+            }
+          }
+        }
+        if (RelNode.class.isAssignableFrom(relNodeClass.getSuperclass())) {
+          relNodeClass = (Class<RelNode>) relNodeClass.getSuperclass();
+        } else {
+          relNodeClass = null;
+        }
+      }
+      return null;
+    }
+  }
+
+  /** Extended work space. */
+  static class Space2 extends Space {
+    private Class<Metadata> metadataClass0;
+
+    public Space2(Class<Metadata> metadataClass0,
+                  ImmutableMap<Method, MetadataHandler> providerMap) {
+      super(providerMap);
+      this.metadataClass0 = metadataClass0;
+    }
+
+    public static Space2 create(MetadataHandler target,
+                                ImmutableList<Method> methods) {
+      assert methods.size() > 0;
+      final Method method0 = methods.get(0);
+      //noinspection unchecked
+      Class<Metadata> metadataClass0 = (Class) method0.getDeclaringClass();
+      assert Metadata.class.isAssignableFrom(metadataClass0);
+      for (Method method : methods) {
+        assert method.getDeclaringClass() == metadataClass0;
+      }
+
+      final ImmutableMap.Builder<Method, MetadataHandler> providerBuilder =
+        ImmutableMap.builder();
+      for (final Method method : methods) {
+        providerBuilder.put(method, target);
+      }
+      return new Space2(metadataClass0, providerBuilder.build());
     }
   }
 }

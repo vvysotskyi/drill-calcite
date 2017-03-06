@@ -170,6 +170,16 @@ public abstract class Bug {
    * Timeout executing joins against MySQL</a> is fixed. */
   public static final boolean CALCITE_673_FIXED = false;
 
+  /** Whether
+   * <a href="https://issues.apache.org/jira/browse/CALCITE-1048">[CALCITE-1048]
+   * Make metadata more robust</a> is fixed. */
+  public static final boolean CALCITE_1048_FIXED = false;
+
+  /** Whether
+   * <a href="https://issues.apache.org/jira/browse/CALCITE-1045">[CALCITE-1045]
+   * Decorrelate sub-queries in Project and Join</a> is fixed. */
+  public static final boolean CALCITE_1045_FIXED = false;
+
   /**
    * Use this to flag temporary code.
    */

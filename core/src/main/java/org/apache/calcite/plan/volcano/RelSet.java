@@ -24,6 +24,7 @@ import org.apache.calcite.plan.RelOptUtil;
 import org.apache.calcite.plan.RelTrait;
 import org.apache.calcite.plan.RelTraitSet;
 import org.apache.calcite.rel.RelNode;
+import org.apache.calcite.rel.metadata.RelMetadataQuery;
 import org.apache.calcite.util.trace.CalciteTrace;
 
 import com.google.common.collect.ImmutableList;
@@ -299,12 +300,12 @@ class RelSet {
     }
 
     // Make sure the cost changes as a result of merging are propagated.
-    Set<RelSubset> activeSet = new HashSet<RelSubset>();
+    final Set<RelSubset> activeSet = new HashSet<>();
+    final RelMetadataQuery mq = RelMetadataQuery.instance();
     for (RelNode parentRel : getParentRels()) {
       final RelSubset parentSubset = planner.getSubset(parentRel);
       parentSubset.propagateCostImprovements(
-          planner,
-          parentRel,
+          planner, mq, parentRel,
           activeSet);
     }
     assert activeSet.isEmpty();
