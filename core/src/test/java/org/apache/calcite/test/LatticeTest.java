@@ -380,6 +380,7 @@ public class LatticeTest {
             + "  EnumerableTableScan(table=[[adhoc, m{16, 17, 27, 31}]])");
   }
 
+  @Ignore ("Timeout")
   @Test public void testTileAlgorithm2() {
     // Different explain than above, but note that it still selects columns
     // (27, 31).

@@ -2008,6 +2008,7 @@ public class JdbcTest {
 
   /** Tests a simple (primary key to primary key) N-way join, with arbitrary
    * N. */
+  @Ignore("Timeout")
   @Test public void testJoinManyWay() {
     // Timings without LoptOptimizeJoinRule
     //    N  Time
