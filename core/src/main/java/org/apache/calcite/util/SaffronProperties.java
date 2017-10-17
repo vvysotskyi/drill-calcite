@@ -19,9 +19,8 @@ package org.apache.calcite.util;
 import org.eigenbase.util.property.BooleanProperty;
 import org.eigenbase.util.property.StringProperty;
 
-import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.security.AccessControlException;
 import java.util.Enumeration;
 import java.util.Properties;
@@ -133,16 +132,14 @@ public class SaffronProperties extends Properties {
     if (properties == null) {
       properties = new SaffronProperties();
 
-      // read properties from the file "saffron.properties", if it exists
-      File file = new File("saffron.properties");
-      try {
-        if (file.exists()) {
-          try {
-            properties.load(new FileInputStream(file));
-          } catch (IOException e) {
-            throw Util.newInternal(e, "while reading from " + file);
-          }
+      // read properties from the file "saffron.properties", if it exists in classpath
+      try (InputStream stream = SaffronProperties.class.getClassLoader()
+          .getResourceAsStream("saffron.properties")) {
+        if (stream != null) {
+          properties.load(stream);
         }
+      } catch (IOException e) {
+        throw new RuntimeException("while reading from saffron.properties file", e);
       } catch (AccessControlException e) {
         // we're in a sandbox
       }
