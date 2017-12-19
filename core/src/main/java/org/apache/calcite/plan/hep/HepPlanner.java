@@ -60,6 +60,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import static org.apache.calcite.rel.metadata.RelMdUtil.clearCache;
+
 /**
  * HepPlanner is a heuristic implementation of the {@link RelOptPlanner}
  * interface.
@@ -812,6 +814,7 @@ public class HepPlanner extends AbstractRelOptPlanner {
         }
         parentRel.replaceInput(i, preservedVertex);
       }
+      clearCache(parentRel);
       graph.removeEdge(parent, discardedVertex);
       graph.addEdge(parent, preservedVertex);
       updateVertex(parent, parentRel);
@@ -873,8 +876,9 @@ public class HepPlanner extends AbstractRelOptPlanner {
       }
       child = buildFinalPlan((HepRelVertex) child);
       rel.replaceInput(i, child);
-      rel.recomputeDigest();
     }
+    clearCache(rel);
+    rel.recomputeDigest();
 
     return rel;
   }
