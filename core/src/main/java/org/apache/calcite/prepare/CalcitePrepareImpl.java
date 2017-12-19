@@ -224,8 +224,8 @@ public class CalcitePrepareImpl implements CalcitePrepare {
 
     final CalcitePreparingStmt preparingStmt =
         new CalcitePreparingStmt(this, context, catalogReader, typeFactory,
-            context.getRootSchema(), null, planner, resultConvention,
-            createConvertletTable());
+            context.getRootSchema(), null, resultConvention, createConvertletTable(),
+            createCluster(planner, new RexBuilder(typeFactory)));
     final SqlToRelConverter converter =
         preparingStmt.getSqlToRelConverter(validator, catalogReader,
             configBuilder.build());
@@ -587,8 +587,8 @@ public class CalcitePrepareImpl implements CalcitePrepare {
             : EnumerableConvention.INSTANCE;
     final CalcitePreparingStmt preparingStmt =
         new CalcitePreparingStmt(this, context, catalogReader, typeFactory,
-            context.getRootSchema(), prefer, planner, resultConvention,
-            createConvertletTable());
+            context.getRootSchema(), prefer, resultConvention, createConvertletTable(),
+            createCluster(planner, new RexBuilder(typeFactory)));
 
     final RelDataType x;
     final Prepare.PreparedResult preparedResult;
@@ -854,7 +854,7 @@ public class CalcitePrepareImpl implements CalcitePrepare {
   }
 
   protected void populateMaterializations(Context context,
-      RelOptPlanner planner, Prepare.Materialization materialization) {
+      Prepare.Materialization materialization, RelOptCluster cluster) {
     // REVIEW: initialize queryRel and tableRel inside MaterializationService,
     // not here?
     try {
@@ -866,8 +866,8 @@ public class CalcitePrepareImpl implements CalcitePrepare {
               context.getTypeFactory(),
               context.config());
       final CalciteMaterializer materializer =
-          new CalciteMaterializer(this, context, catalogReader, schema, planner,
-              createConvertletTable());
+          new CalciteMaterializer(this, context, catalogReader, schema,
+              createConvertletTable(), cluster);
       materializer.populate(materialization);
     } catch (Exception e) {
       throw new RuntimeException("While populating materialization "
@@ -919,6 +919,7 @@ public class CalcitePrepareImpl implements CalcitePrepare {
     protected final RelDataTypeFactory typeFactory;
     protected final SqlRexConvertletTable convertletTable;
     private final EnumerableRel.Prefer prefer;
+    private final RelOptCluster cluster;
     private final Map<String, Object> internalParameters =
         new LinkedHashMap<>();
     private int expansionDepth;
@@ -930,17 +931,18 @@ public class CalcitePrepareImpl implements CalcitePrepare {
         RelDataTypeFactory typeFactory,
         CalciteSchema schema,
         EnumerableRel.Prefer prefer,
-        RelOptPlanner planner,
         Convention resultConvention,
-        SqlRexConvertletTable convertletTable) {
+        SqlRexConvertletTable convertletTable,
+        RelOptCluster cluster) {
       super(context, catalogReader, resultConvention);
       this.prepare = prepare;
       this.schema = schema;
       this.prefer = prefer;
-      this.planner = planner;
+      this.cluster = cluster;
+      this.planner = cluster.getPlanner();
+      this.rexBuilder = cluster.getRexBuilder();
       this.typeFactory = typeFactory;
       this.convertletTable = convertletTable;
-      this.rexBuilder = new RexBuilder(typeFactory);
     }
 
     @Override protected void init(Class runtimeContextClass) {
@@ -1009,7 +1011,6 @@ public class CalcitePrepareImpl implements CalcitePrepare {
         SqlValidator validator,
         CatalogReader catalogReader,
         SqlToRelConverter.Config config) {
-      final RelOptCluster cluster = prepare.createCluster(planner, rexBuilder);
       return new SqlToRelConverter(this, validator, catalogReader, cluster,
           convertletTable, config);
     }
@@ -1145,7 +1146,7 @@ public class CalcitePrepareImpl implements CalcitePrepare {
               ? MaterializationService.instance().query(schema)
               : ImmutableList.of();
       for (Prepare.Materialization materialization : materializations) {
-        prepare.populateMaterializations(context, planner, materialization);
+        prepare.populateMaterializations(context, materialization, cluster);
       }
       return materializations;
     }
