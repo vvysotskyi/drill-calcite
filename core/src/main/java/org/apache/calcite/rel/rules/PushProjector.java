@@ -33,6 +33,7 @@ import org.apache.calcite.rex.RexNode;
 import org.apache.calcite.rex.RexUtil;
 import org.apache.calcite.rex.RexVisitorImpl;
 import org.apache.calcite.runtime.PredicateImpl;
+import org.apache.calcite.sql.SemiJoinType;
 import org.apache.calcite.sql.SqlOperator;
 import org.apache.calcite.tools.RelBuilder;
 import org.apache.calcite.util.BitSets;
@@ -258,38 +259,37 @@ public class PushProjector {
       List<RelDataTypeField> rightFields =
           corrRel.getRight().getRowType().getFieldList();
       nFields = leftFields.size();
-      nFieldsRight = rightFields.size();
+      SemiJoinType joinType = corrRel.getJoinType();
+      switch (joinType) {
+      case SEMI:
+      case ANTI:
+        nFieldsRight = 0;
+        break;
+      default:
+        nFieldsRight = rightFields.size();
+      }
       nSysFields = 0;
       childBitmap =
-          ImmutableBitSet.range(nSysFields, nFields + nSysFields);
+          ImmutableBitSet.range(0, nFields);
       rightBitmap =
-          ImmutableBitSet.range(nFields + nSysFields, nChildFields);
+          ImmutableBitSet.range(nFields, nChildFields);
 
       // Required columns need to be included in project
-      // But when the rowType contains dynamic star, the required column is already included
-      boolean containDynamicStar = false;
-      for (RelDataTypeField field : corrRel.getRowType().getFieldList()) {
-        if (field.isDynamicStar()) {
-          containDynamicStar = true;
-          break;
-        }
-      }
+      projRefs.or(BitSets.of(corrRel.getRequiredColumns()));
 
-      if (!containDynamicStar) {
-        projRefs.or(BitSets.of(corrRel.getRequiredColumns()));
-      }
-
-      switch (corrRel.getJoinType()) {
+      switch (joinType) {
       case INNER:
         strongBitmap = ImmutableBitSet.of();
         break;
       case ANTI:
-      case SEMI:
+      case SEMI:  // All the left-input's columns must be strong
+        strongBitmap = ImmutableBitSet.range(0, nFields);
+        break;
       case LEFT: // All the right-input's columns must be strong
-        strongBitmap = ImmutableBitSet.range(nFields + nSysFields, nChildFields);
+        strongBitmap = ImmutableBitSet.range(nFields, nChildFields);
         break;
       default:
-        strongBitmap = ImmutableBitSet.range(nSysFields, nChildFields);
+        strongBitmap = ImmutableBitSet.range(0, nChildFields);
       }
     } else {
       nFields = nChildFields;
@@ -301,8 +301,8 @@ public class PushProjector {
     }
     assert nChildFields == nSysFields + nFields + nFieldsRight;
 
-    childPreserveExprs = new ArrayList<RexNode>();
-    rightPreserveExprs = new ArrayList<RexNode>();
+    childPreserveExprs = new ArrayList<>();
+    rightPreserveExprs = new ArrayList<>();
 
     rexBuilder = childRel.getCluster().getRexBuilder();
   }

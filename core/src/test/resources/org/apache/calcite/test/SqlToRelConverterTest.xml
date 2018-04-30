@@ -709,6 +709,40 @@ LogicalProject(EXPR$0=[CHAR_LENGTH('foo')])
             <![CDATA[values (character_length('foo'))]]>
         </Resource>
     </TestCase>
+    <TestCase name="testDynamicNestedColumn">
+        <Resource name="sql">
+            <![CDATA[select t3.fake_q1['fake_col2'] as fake2
+from (
+  select t2.fake_col as fake_q1
+  from SALES.CUSTOMER as t2) as t3]]>
+        </Resource>
+        <Resource name="plan">
+            <![CDATA[
+LogicalProject(FAKE2=[ITEM($0, 'fake_col2')])
+  LogicalProject(FAKE_Q1=[$0])
+    LogicalTableScan(table=[[CATALOG, SALES, CUSTOMER]])
+]]>
+        </Resource>
+    </TestCase>
+    <TestCase name="testDynamicSchemaUnnest">
+        <Resource name="sql">
+            <![CDATA[select t1.c_nationkey, t3.fake_col3
+from SALES.CUSTOMER as t1,
+lateral (select t2.fake_col2 as fake_col3
+         from unnest(t1.fake_col) as t2) as t3]]>
+        </Resource>
+        <Resource name="plan">
+            <![CDATA[
+LogicalProject(C_NATIONKEY=[$1], FAKE_COL3=[$2])
+  LogicalCorrelate(correlation=[$cor0], joinType=[inner], requiredColumns=[{0}])
+    LogicalTableScan(table=[[CATALOG, SALES, CUSTOMER]])
+    LogicalProject(FAKE_COL3=[$0])
+      Uncollect
+        LogicalProject(FAKE_COL=[$cor0.FAKE_COL])
+          LogicalValues(tuples=[[{ 0 }]])
+]]>
+        </Resource>
+    </TestCase>
     <TestCase name="testOverAvg">
         <Resource name="plan">
             <![CDATA[
@@ -5146,7 +5180,7 @@ LogicalProject(DEPTNO=[$0], EMPNO_AVG=[$3])
     <TestCase name="testUnnestArrayPlan">
         <Resource name="sql">
             <![CDATA[select  d.deptno, e2.empno_avg
-            from dept_nested as d, 
+            from dept_nested as d,
             UNNEST(d.employees) e2]]>
         </Resource>
         <Resource name="plan">
@@ -5171,9 +5205,10 @@ LogicalProject(DEPTNO=[$0], EMPNO=[$3])
 LogicalProject(DEPTNO=[$0], EMPNO=[$3])
   LogicalCorrelate(correlation=[$cor0], joinType=[inner], requiredColumns=[{2}])
     LogicalTableScan(table=[[CATALOG, SALES, DEPT_NESTED]])
-    Uncollect
-      LogicalProject(EMPLOYEES=[$cor0.EMPLOYEES_2])
-        LogicalValues(tuples=[[{ 0 }]])
+    LogicalProject(EMPNO=[$0], Y=[$1], Z=[$2])
+      Uncollect
+        LogicalProject(EMPLOYEES=[$cor0.EMPLOYEES_2])
+          LogicalValues(tuples=[[{ 0 }]])
 ]]>
         </Resource>
     </TestCase>
@@ -5263,6 +5298,39 @@ LogicalProject(ANYEMPNO=[$1])
   LogicalAggregate(group=[{0}], ANYEMPNO=[ANY_VALUE($1)])
     LogicalProject(SAL=[$5], EMPNO=[$0])
       LogicalTableScan(table=[[CATALOG, SALES, EMP]])
+]]>
+        </Resource>
+    </TestCase>
+    <TestCase name="testStarDynamicSchemaUnnest">
+        <Resource name="sql">
+            <![CDATA[select t3.fake_q1['fake_col2'] as fake2
+            from (select t2.fake_col as fake_q1 from SALES.CUSTOMER as t2) as t3]]>
+        </Resource>
+        <Resource name="plan">
+            <![CDATA[
+LogicalProject(**=[$1], FAKE_COL3=[$2])
+  LogicalCorrelate(correlation=[$cor0], joinType=[inner], requiredColumns=[{0}])
+    LogicalTableScan(table=[[CATALOG, SALES, CUSTOMER]])
+    LogicalProject(FAKE_COL3=[$0])
+      Uncollect
+        LogicalProject(FAKE_COL=[$cor0.FAKE_COL])
+          LogicalValues(tuples=[[{ 0 }]])
+]]>
+        </Resource>
+    </TestCase>
+    <TestCase name="testStarDynamicSchemaUnnest2">
+        <Resource name="sql">
+            <![CDATA[select t3.fake_q1['fake_col2'] as fake2
+            from (select t2.fake_col as fake_q1 from SALES.CUSTOMER as t2) as t3]]>
+        </Resource>
+        <Resource name="plan">
+            <![CDATA[
+LogicalProject(**=[$1], $unnest=[$2])
+  LogicalCorrelate(correlation=[$cor0], joinType=[inner], requiredColumns=[{0}])
+    LogicalTableScan(table=[[CATALOG, SALES, CUSTOMER]])
+    Uncollect
+      LogicalProject(FAKE_COL=[$cor0.FAKE_COL])
+        LogicalValues(tuples=[[{ 0 }]])
 ]]>
         </Resource>
     </TestCase>

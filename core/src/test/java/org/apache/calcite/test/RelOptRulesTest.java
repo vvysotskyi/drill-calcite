@@ -33,6 +33,7 @@ import org.apache.calcite.rel.RelCollationTraitDef;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.RelRoot;
 import org.apache.calcite.rel.core.Aggregate;
+import org.apache.calcite.rel.core.CorrelationId;
 import org.apache.calcite.rel.core.Intersect;
 import org.apache.calcite.rel.core.Join;
 import org.apache.calcite.rel.core.JoinRelType;
@@ -40,6 +41,7 @@ import org.apache.calcite.rel.core.Minus;
 import org.apache.calcite.rel.core.Project;
 import org.apache.calcite.rel.core.RelFactories;
 import org.apache.calcite.rel.core.Union;
+import org.apache.calcite.rel.logical.LogicalCorrelate;
 import org.apache.calcite.rel.logical.LogicalProject;
 import org.apache.calcite.rel.logical.LogicalTableModify;
 import org.apache.calcite.rel.logical.LogicalTableScan;
@@ -108,12 +110,14 @@ import org.apache.calcite.rex.RexCall;
 import org.apache.calcite.rex.RexNode;
 import org.apache.calcite.runtime.Hook;
 import org.apache.calcite.runtime.PredicateImpl;
+import org.apache.calcite.sql.SemiJoinType;
 import org.apache.calcite.sql.SqlNode;
 import org.apache.calcite.sql.fun.SqlStdOperatorTable;
 import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.sql.validate.SqlValidator;
 import org.apache.calcite.sql2rel.SqlToRelConverter;
 import org.apache.calcite.tools.RelBuilder;
+import org.apache.calcite.util.ImmutableBitSet;
 
 import static org.apache.calcite.plan.RelOptRule.none;
 import static org.apache.calcite.plan.RelOptRule.operand;
@@ -1043,15 +1047,115 @@ public class RelOptRulesTest extends RelOptTestBase {
             + "on e.ename = b.ename and e.deptno = 10");
   }
 
-  @Test
-  @Ignore public void testProjectCorrelateTransposeDynamic() {
+  @Test public void testProjectCorrelateTransposeDynamic() {
     ProjectCorrelateTransposeRule customPCTrans =
         new ProjectCorrelateTransposeRule(skipItem, RelFactories.LOGICAL_BUILDER);
 
-    checkPlanningDynamic(customPCTrans,
-        "select t1.c_nationkey, t2.fake_col2 "
+    HepProgramBuilder programBuilder = HepProgram.builder()
+        .addRuleInstance(customPCTrans);
+
+    String query = "select t1.c_nationkey, t2.a as fake_col2 "
         + "from SALES.CUSTOMER as t1, "
-        + "unnest(t1.fake_col) as t2");
+        + "unnest(t1.fake_col) as t2(a)";
+
+    checkPlanning(
+        createDynamicTester(),
+        null,
+        new HepPlanner(programBuilder.build()),
+        query,
+        true);
+  }
+
+  @Test public void testProjectCorrelateTransposeRuleLeftCorrelate() {
+    final String sql = "SELECT e1.empno\n"
+        + "FROM emp e1 "
+        + "where exists (select empno, deptno from dept d2 where e1.deptno = d2.deptno)";
+    HepProgram program = new HepProgramBuilder()
+        .addRuleInstance(FilterProjectTransposeRule.INSTANCE)
+        .addRuleInstance(ProjectFilterTransposeRule.INSTANCE)
+        .addRuleInstance(ProjectCorrelateTransposeRule.INSTANCE)
+        .build();
+    sql(sql)
+        .withDecorrelation(false)
+        .expand(true)
+        .with(program)
+        .check();
+  }
+
+  @Test public void testProjectCorrelateTransposeRuleSemiCorrelate() {
+    RelBuilder relBuilder = RelBuilder.create(RelBuilderTest.config().build());
+    RelNode left = relBuilder
+        .values(new String[]{"f", "f2"}, "1", "2").build();
+
+    CorrelationId correlationId = new CorrelationId(0);
+    RexNode rexCorrel =
+        relBuilder.getRexBuilder().makeCorrel(
+            left.getRowType(),
+            correlationId);
+
+    RelNode right = relBuilder
+        .values(new String[]{"f3", "f4"}, "1", "2")
+        .project(relBuilder.field(0),
+            relBuilder.getRexBuilder()
+                .makeFieldAccess(rexCorrel, 0))
+        .build();
+    LogicalCorrelate correlate = new LogicalCorrelate(left.getCluster(),
+        left.getTraitSet(), left, right, correlationId,
+        ImmutableBitSet.of(0), SemiJoinType.SEMI);
+
+    relBuilder.push(correlate);
+    RelNode relNode = relBuilder.project(relBuilder.field(0))
+        .build();
+
+    HepProgram program = new HepProgramBuilder()
+        .addRuleInstance(ProjectCorrelateTransposeRule.INSTANCE)
+        .build();
+
+    HepPlanner hepPlanner = new HepPlanner(program);
+    hepPlanner.setRoot(relNode);
+    RelNode output = hepPlanner.findBestExp();
+
+    final String planAfter = NL + RelOptUtil.toString(output);
+    final DiffRepository diffRepos = getDiffRepos();
+    diffRepos.assertEquals("planAfter", "${planAfter}", planAfter);
+    SqlToRelTestBase.assertValid(output);
+  }
+
+  @Test public void testProjectCorrelateTransposeRuleAntiCorrelate() {
+    RelBuilder relBuilder = RelBuilder.create(RelBuilderTest.config().build());
+    RelNode left = relBuilder
+        .values(new String[]{"f", "f2"}, "1", "2").build();
+
+    CorrelationId correlationId = new CorrelationId(0);
+    RexNode rexCorrel =
+        relBuilder.getRexBuilder().makeCorrel(
+            left.getRowType(),
+            correlationId);
+
+    RelNode right = relBuilder
+        .values(new String[]{"f3", "f4"}, "1", "2")
+        .project(relBuilder.field(0),
+            relBuilder.getRexBuilder().makeFieldAccess(rexCorrel, 0)).build();
+    LogicalCorrelate correlate = new LogicalCorrelate(left.getCluster(),
+        left.getTraitSet(), left, right, correlationId,
+        ImmutableBitSet.of(0), SemiJoinType.ANTI);
+
+    relBuilder.push(correlate);
+    RelNode relNode = relBuilder.project(relBuilder.field(0))
+        .build();
+
+    HepProgram program = new HepProgramBuilder()
+        .addRuleInstance(ProjectCorrelateTransposeRule.INSTANCE)
+        .build();
+
+    HepPlanner hepPlanner = new HepPlanner(program);
+    hepPlanner.setRoot(relNode);
+    RelNode output = hepPlanner.findBestExp();
+
+    final String planAfter = NL + RelOptUtil.toString(output);
+    final DiffRepository diffRepos = getDiffRepos();
+    diffRepos.assertEquals("planAfter", "${planAfter}", planAfter);
+    SqlToRelTestBase.assertValid(output);
   }
 
   @Test public void testProjectCorrelateTransposeWithExprCond() {
