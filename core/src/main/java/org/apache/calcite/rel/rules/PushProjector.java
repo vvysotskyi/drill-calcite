@@ -266,7 +266,18 @@ public class PushProjector {
           ImmutableBitSet.range(nFields + nSysFields, nChildFields);
 
       // Required columns need to be included in project
-      projRefs.or(BitSets.of(corrRel.getRequiredColumns()));
+      // But when the rowType contains dynamic star, the required column is already included
+      boolean containDynamicStar = false;
+      for (RelDataTypeField field : corrRel.getRowType().getFieldList()) {
+        if (field.isDynamicStar()) {
+          containDynamicStar = true;
+          break;
+        }
+      }
+
+      if (!containDynamicStar) {
+        projRefs.or(BitSets.of(corrRel.getRequiredColumns()));
+      }
 
       switch (corrRel.getJoinType()) {
       case INNER:

@@ -1114,6 +1114,13 @@ public class SqlToRelConverterTest extends SqlToRelTestBase {
     sql(sql).with(getExtendedTester()).ok();
   }
 
+  @Test public void testStarUnnestArrayPlan() {
+    final String sql = "select *\n"
+        + "from dept_nested as d,\n"
+        + " UNNEST(d.employees) e2";
+    sql(sql).with(getExtendedTester()).ok();
+  }
+
   @Test public void testUnnestArrayPlanAs() {
     final String sql = "select d.deptno, e2.empno\n"
         + "from dept_nested as d,\n"
@@ -2491,6 +2498,20 @@ public class SqlToRelConverterTest extends SqlToRelTestBase {
     sql(sql3).with(getTesterWithDynamicTable()).ok();
   }
 
+  @Test public void testStarDynamicSchemaUnnest() {
+    final String sql3 = "select * \n"
+        + "from SALES.CUSTOMER as t1,\n"
+        + "lateral (select t2.fake_col2 as fake_col3\n"
+        + "         from unnest(t1.fake_col) as t2) as t3";
+    sql(sql3).with(getTesterWithDynamicTable()).ok();
+  }
+
+  @Test public void testStarDynamicSchemaUnnest2() {
+    final String sql3 = "select * \n"
+        + "from SALES.CUSTOMER as t1,\n"
+        + "unnest(t1.fake_col) as t2";
+    sql(sql3).with(getTesterWithDynamicTable()).ok();
+  }
   /**
    * Test case for Dynamic Table / Dynamic Star support
    * <a href="https://issues.apache.org/jira/browse/CALCITE-1150">[CALCITE-1150]</a>
