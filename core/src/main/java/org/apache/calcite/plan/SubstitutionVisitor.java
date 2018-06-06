@@ -1363,7 +1363,8 @@ public class SubstitutionVisitor {
     if (aggregation == SqlStdOperatorTable.SUM
         || aggregation == SqlStdOperatorTable.MIN
         || aggregation == SqlStdOperatorTable.MAX
-        || aggregation == SqlStdOperatorTable.SUM0) {
+        || aggregation == SqlStdOperatorTable.SUM0
+        || aggregation == SqlStdOperatorTable.ANY_VALUE) {
       return aggregation;
     } else if (aggregation == SqlStdOperatorTable.COUNT) {
       return SqlStdOperatorTable.SUM0;
