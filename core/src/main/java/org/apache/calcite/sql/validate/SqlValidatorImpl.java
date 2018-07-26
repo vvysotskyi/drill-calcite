@@ -2971,6 +2971,9 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
     case OVER:
       validateOver((SqlCall) node, scope);
       break;
+    case UNNEST:
+      validateUnnest((SqlCall) node, scope, targetRowType);
+      break;
     default:
       validateQuery(node, scope, targetRowType);
       break;
@@ -2983,6 +2986,14 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
 
   protected void validateOver(SqlCall call, SqlValidatorScope scope) {
     throw new AssertionError("OVER unexpected in this context");
+  }
+
+  protected void validateUnnest(SqlCall call, SqlValidatorScope scope, RelDataType targetRowType) {
+    for (int i = 0; i < call.operandCount(); i++) {
+      SqlNode expandedItem = expand(call.operand(i), scope);
+      call.setOperand(i, expandedItem);
+    }
+    validateQuery(call, scope, targetRowType);
   }
 
   private void checkRollUpInUsing(SqlIdentifier identifier, SqlNode leftOrRight) {
