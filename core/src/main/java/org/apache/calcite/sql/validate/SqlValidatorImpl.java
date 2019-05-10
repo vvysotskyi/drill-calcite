@@ -17,7 +17,6 @@
 package org.apache.calcite.sql.validate;
 
 import org.apache.calcite.config.NullCollation;
-import org.apache.calcite.jdbc.CalciteSchema;
 import org.apache.calcite.linq4j.Ord;
 import org.apache.calcite.linq4j.function.Function2;
 import org.apache.calcite.linq4j.function.Functions;
@@ -3050,17 +3049,19 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
     validateQuery(call, scope, targetRowType);
   }
 
-  private void checkRollUpInUsing(SqlIdentifier identifier, SqlNode leftOrRight) {
-    leftOrRight = stripAs(leftOrRight);
-    // if it's not a SqlIdentifier then that's fine, it'll be validated somewhere else.
-    if (leftOrRight instanceof SqlIdentifier) {
-      SqlIdentifier from = (SqlIdentifier) leftOrRight;
-      Table table = findTable(catalogReader.getRootSchema(), Util.last(from.names),
-              catalogReader.nameMatcher().isCaseSensitive());
-      String name = Util.last(identifier.names);
+  private void checkRollUpInUsing(SqlIdentifier identifier,
+      SqlNode leftOrRight, SqlValidatorScope scope) {
+    SqlValidatorNamespace namespace = getNamespace(leftOrRight, scope);
+    if (namespace != null) {
+      SqlValidatorTable sqlValidatorTable = namespace.getTable();
+      if (sqlValidatorTable != null) {
+        Table table = sqlValidatorTable.unwrap(Table.class);
+        String column = Util.last(identifier.names);
 
-      if (table != null && table.isRolledUp(name)) {
-        throw newValidationError(identifier, RESOURCE.rolledUpNotAllowed(name, "USING"));
+        if (table.isRolledUp(column)) {
+          throw newValidationError(identifier,
+              RESOURCE.rolledUpNotAllowed(column, "USING"));
+        }
       }
     }
   }
@@ -3103,8 +3104,8 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
               RESOURCE.naturalOrUsingColumnNotCompatible(id.getSimple(),
                   leftColType.toString(), rightColType.toString()));
         }
-        checkRollUpInUsing(id, left);
-        checkRollUpInUsing(id, right);
+        checkRollUpInUsing(id, left, scope);
+        checkRollUpInUsing(id, right, scope);
       }
       break;
     default:
@@ -3438,13 +3439,14 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
       return true;
     }
 
-    String tableAlias = pair.left;
     String columnName = pair.right;
 
-    Table table = findTable(tableAlias);
-    if (table != null) {
+    SqlValidatorTable sqlValidatorTable =
+        scope.fullyQualify(identifier).namespace.getTable();
+    if (sqlValidatorTable != null) {
+      Table table = sqlValidatorTable.unwrap(Table.class);
       return table.rolledUpColumnValidInsideAgg(columnName, aggCall, parent,
-              catalogReader.getConfig());
+          catalogReader.getConfig());
     }
     return true;
   }
@@ -3458,60 +3460,15 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
       return false;
     }
 
-    String tableAlias = pair.left;
     String columnName = pair.right;
 
-    Table table = findTable(tableAlias);
-    if (table != null) {
+    SqlValidatorTable sqlValidatorTable =
+        scope.fullyQualify(identifier).namespace.getTable();
+    if (sqlValidatorTable != null) {
+      Table table = sqlValidatorTable.unwrap(Table.class);
       return table.isRolledUp(columnName);
     }
     return false;
-  }
-
-  private Table findTable(CalciteSchema schema, String tableName, boolean caseSensitive) {
-    CalciteSchema.TableEntry entry = schema.getTable(tableName, caseSensitive);
-    if (entry != null) {
-      return entry.getTable();
-    }
-
-    // Check sub schemas
-    for (CalciteSchema subSchema : schema.getSubSchemaMap().values()) {
-      Table table = findTable(subSchema, tableName, caseSensitive);
-      if (table != null) {
-        return table;
-      }
-    }
-
-    return null;
-  }
-
-  /**
-   * Given a table alias, find the corresponding {@link Table} associated with it
-   * */
-  private Table findTable(String alias) {
-    List<String> names = null;
-    if (tableScope == null) {
-      // no tables to find
-      return null;
-    }
-
-    for (ScopeChild child : tableScope.children) {
-      if (catalogReader.nameMatcher().matches(child.name, alias)) {
-        names = ((SqlIdentifier) child.namespace.getNode()).names;
-        break;
-      }
-    }
-    if (names == null || names.size() == 0) {
-      return null;
-    } else if (names.size() == 1) {
-      return findTable(catalogReader.getRootSchema(), names.get(0),
-              catalogReader.nameMatcher().isCaseSensitive());
-    }
-
-    CalciteSchema.TableEntry entry =
-        SqlValidatorUtil.getTableEntry(catalogReader, names);
-
-    return entry == null ? null : entry.getTable();
   }
 
   private boolean shouldCheckForRollUp(SqlNode from) {
