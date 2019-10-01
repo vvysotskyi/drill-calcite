@@ -5668,6 +5668,25 @@ public class RelOptRulesTest extends RelOptTestBase {
       call.transformTo(myProject);
     }
   }
+
+  @Test public void testProjectJoinTransposeItem() {
+    ProjectJoinTransposeRule projectJoinTransposeRule =
+        new ProjectJoinTransposeRule(skipItem, RelFactories.LOGICAL_BUILDER);
+
+    HepProgramBuilder programBuilder = HepProgram.builder()
+        .addRuleInstance(projectJoinTransposeRule);
+
+    String query = "select t1.c_nationkey[0], t2.c_nationkey[0] "
+        + "from sales.customer as t1 left outer join sales.customer as t2 "
+        + "on t1.c_nationkey[0] = t2.c_nationkey[0]";
+
+    checkPlanning(
+        createDynamicTester(),
+        null,
+        new HepPlanner(programBuilder.build()),
+        query,
+        false);
+  }
 }
 
 // End RelOptRulesTest.java
