@@ -162,6 +162,7 @@ public class GeodeFilter extends Filter implements GeodeRel {
       case CAST:
         // FIXME This will not work in all cases (for example, we ignore string encoding)
         return getLeftNodeFieldName(((RexCall) left).operands.get(0));
+      case ITEM:
       case OTHER_FUNCTION:
         return left.accept(new GeodeRules.RexToGeodeTranslator(this.fieldNames));
       default:
@@ -347,7 +348,7 @@ public class GeodeFilter extends Filter implements GeodeRel {
       case CAST:
         // FIXME This will not work in all cases (for example, we ignore string encoding)
         return translateBinary2(op, ((RexCall) left).operands.get(0), right);
-      case OTHER_FUNCTION:
+      case ITEM:
         String item = left.accept(new GeodeRules.RexToGeodeTranslator(this.fieldNames));
         return (item == null) ? null : item + " " + op + " " + quoteCharLiteral(rightLiteral);
       default:
