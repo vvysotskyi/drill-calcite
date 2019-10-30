@@ -2727,6 +2727,13 @@ public class RexProgramTest extends RexProgramBuilderBase {
     assertThat(e.toString(), is("IN(?0.int0, 1, 2)"));
   }
 
+  @Test public void testSimplifyCastUnaryMinus() {
+    RexNode expr =
+        isNull(ne(unaryMinus(cast(unaryMinus(vIntNotNull(1)), nullable(tInt()))), vIntNotNull(1)));
+    RexNode s = simplify.simplifyUnknownAs(expr, RexUnknownAs.UNKNOWN);
+
+    assertThat(s, is(falseLiteral));
+  }
 }
 
 // End RexProgramTest.java

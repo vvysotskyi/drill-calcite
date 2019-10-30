@@ -5687,6 +5687,35 @@ public class RelOptRulesTest extends RelOptTestBase {
         query,
         false);
   }
+
+  @Test public void testSimplifyItemIsNotNull() {
+    HepProgramBuilder programBuilder = HepProgram.builder()
+        .addRuleInstance(ReduceExpressionsRule.FILTER_INSTANCE);
+
+    String query = "select * from sales.customer as t1 where t1.c_nationkey[0] is not null";
+
+    checkPlanning(
+        createDynamicTester(),
+        null,
+        new HepPlanner(programBuilder.build()),
+        query,
+        true);
+  }
+
+  @Test public void testSimplifyItemIsNull() {
+    HepProgramBuilder programBuilder = HepProgram.builder()
+        .addRuleInstance(ReduceExpressionsRule.FILTER_INSTANCE);
+
+    String query = "select * from sales.customer as t1 where t1.c_nationkey[0] is null";
+
+    checkPlanning(
+        createDynamicTester(),
+        null,
+        new HepPlanner(programBuilder.build()),
+        query,
+        true);
+  }
+
 }
 
 // End RelOptRulesTest.java

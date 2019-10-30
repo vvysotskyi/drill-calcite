@@ -625,6 +625,23 @@ LogicalProject(EMPNO=[$0])
 ]]>
         </Resource>
     </TestCase>
+    <TestCase name="testCustomDecorrelate">
+        <Resource name="Comparing Plans from LogicalCorrelate and CustomCorrelate">
+            <![CDATA[
+LogicalProject(EMPNO=[$0])
+  LogicalProject(EMPNO=[$0], ENAME=[$1], JOB=[$2], MGR=[$3], HIREDATE=[$4], SAL=[$5], COMM=[$6], DEPTNO=[$7], SLACKER=[$8], DEPTNO0=[$9], NAME=[$10], EMPNO0=[CAST($11):INTEGER], EXPR$0=[CAST($12):INTEGER])
+    LogicalJoin(condition=[AND(=($0, $11), >($5, $12))], joinType=[inner])
+      LogicalJoin(condition=[=($7, $9)], joinType=[inner])
+        LogicalFilter(condition=[<($7, 10)])
+          LogicalTableScan(table=[[CATALOG, SALES, EMP]])
+        LogicalFilter(condition=[<($0, 15)])
+          LogicalTableScan(table=[[CATALOG, SALES, DEPT]])
+      LogicalAggregate(group=[{0}], EXPR$0=[AVG($1)])
+        LogicalProject(EMPNO=[$0], SAL=[$5])
+          LogicalTableScan(table=[[CATALOG, SALES, EMP]])
+]]>
+        </Resource>
+    </TestCase>
     <TestCase name="testDecorrelateExists">
         <Resource name="sql">
             <![CDATA[select * from sales.emp
@@ -1839,8 +1856,7 @@ LogicalProject(EXPR$0=[$1], EXPR$1=[$0])
             <![CDATA[select e.sal + b.comm,
 count(e.empno) over (partition by e.deptno)
 from emp e join bonus b
-on e.ename = b.ename and e.deptno = 10
-]]>
+on e.ename = b.ename and e.deptno = 10]]>
         </Resource>
         <Resource name="planBefore">
             <![CDATA[
@@ -1866,8 +1882,7 @@ LogicalProject(EXPR$0=[+($2, $6)], EXPR$1=[COUNT($0) OVER (PARTITION BY $3 RANGE
             <![CDATA[select e.sal + b.comm,
 count(b.sal) over (partition by b.job)
 from emp e join bonus b
-on e.ename = b.ename and e.deptno = 10
-]]>
+on e.ename = b.ename and e.deptno = 10]]>
         </Resource>
         <Resource name="planBefore">
             <![CDATA[
@@ -1893,8 +1908,7 @@ LogicalProject(EXPR$0=[+($1, $6)], EXPR$1=[COUNT($5) OVER (PARTITION BY $4 RANGE
             <![CDATA[select e.sal + b.comm,
 sum(b.sal + b.sal + 100) over (partition by b.job)
 from emp e join bonus b
-on e.ename = b.ename and e.deptno = 10
-]]>
+on e.ename = b.ename and e.deptno = 10]]>
         </Resource>
         <Resource name="planBefore">
             <![CDATA[
@@ -4527,7 +4541,10 @@ LogicalProject(ENAME=[$1])
     </TestCase>
     <TestCase name="testMergeFilterWithJoinCondition">
         <Resource name="sql">
-            <![CDATA[select d.name as dname,e.ename as ename from emp e inner join dept d on e.deptno=d.deptno where d.name='Propane']]>
+            <![CDATA[select d.name as dname,e.ename as ename
+ from emp e inner join dept d
+ on e.deptno=d.deptno
+ where d.name='Propane']]>
         </Resource>
         <Resource name="planBefore">
             <![CDATA[
@@ -4760,7 +4777,8 @@ LogicalProject(ENAME=[$1])
     </TestCase>
     <TestCase name="testHeterogeneousConversion">
         <Resource name="sql">
-            <![CDATA[select upper(ename) from emp union all select lower(ename) from emp]]>
+            <![CDATA[select upper(ename) from emp union all
+select lower(ename) from emp]]>
         </Resource>
         <Resource name="planBefore">
             <![CDATA[
@@ -6545,8 +6563,7 @@ LogicalProject(NAME=[$1])
             <![CDATA[select *
 from dept a
 left join (select name, 1 from dept) as b
-on a.name = b.name
-]]>
+on a.name = b.name]]>
         </Resource>
         <Resource name="planBefore">
             <![CDATA[
@@ -6572,8 +6589,7 @@ LogicalProject(DEPTNO=[$0], NAME=[$1], NAME0=[$2], EXPR$1=[$3])
             <![CDATA[select *
 from (select name, 1 from dept) as a
 right join dept b
-on a.name = b.name
-]]>
+on a.name = b.name]]>
         </Resource>
         <Resource name="planBefore">
             <![CDATA[
@@ -6597,10 +6613,10 @@ LogicalProject(NAME=[$0], EXPR$1=[$1], DEPTNO=[$2], NAME0=[$3])
     <TestCase name="testJoinProjectTranspose4">
         <Resource name="sql">
             <![CDATA[select *
+from dept a
 left join (select x name, y is not null from
 (values (2, cast(null as integer)), (2, 1)) as t(x, y)) b
-on a.name = b.name
-]]>
+on a.name = b.name]]>
         </Resource>
         <Resource name="planBefore">
             <![CDATA[
@@ -6632,10 +6648,9 @@ LogicalProject(DEPTNO=[$0], NAME=[$1], NAME0=[$2], EXPR$1=[$3])
     <TestCase name="testJoinProjectTranspose5">
         <Resource name="sql">
             <![CDATA[select *
-left join (select x name, y is not null from
-(values (2, cast(null as integer)), (2, 1)) as t(x, y)) b
-on a.name = b.name
-]]>
+from dept a
+left join (select name, 1 + 1 from dept) as b
+on a.name = b.name]]>
         </Resource>
         <Resource name="planBefore">
             <![CDATA[
@@ -6661,8 +6676,7 @@ LogicalProject(DEPTNO=[$0], NAME=[$1], NAME0=[$2], EXPR$1=[$3])
             <![CDATA[select *
 from (select name, 1 from dept) a
 full join (select name, 1 from dept) as b
-on a.name = b.name
-]]>
+on a.name = b.name]]>
         </Resource>
         <Resource name="planBefore">
             <![CDATA[
@@ -6690,8 +6704,7 @@ LogicalProject(NAME=[$0], EXPR$1=[$1], NAME0=[$2], EXPR$10=[$3])
             <![CDATA[select *
 from dept a
 left join (select name from dept) as b
-on a.name = b.name
-]]>
+ on a.name = b.name]]>
         </Resource>
         <Resource name="planBefore">
             <![CDATA[
@@ -6716,9 +6729,10 @@ LogicalProject(DEPTNO=[$0], NAME=[$1], NAME0=[$2])
         <Resource name="sql">
             <![CDATA[select *
 from dept a
-left join (select name, deptno > 10 and cast(null as boolean) from dept b) as b
-on a.name = b.name
-]]>
+left join (
+  select name, deptno > 10 and cast(null as boolean)
+  from dept) as b
+on a.name = b.name]]>
         </Resource>
         <Resource name="planBefore">
             <![CDATA[
@@ -7795,7 +7809,7 @@ LogicalAggregate(group=[{}], EXPR$0=[$SUM0($4)])
     </TestCase>
     <TestCase name="testPushAggregateThroughJoinOnEmptyLogicalValues">
         <Resource name="sql">
-            <![CDATA[select count(*) from sales.emp join sales.dept on job = name]]>
+            <![CDATA[select count(*) volume, sum(C1.sal) C1_sum_sal from (select sal, ename from sales.emp where 1=2) C1 inner join (select ename from sales.emp) C2   on C1.ename = C2.ename ]]>
         </Resource>
         <Resource name="planBefore">
             <![CDATA[
@@ -7930,9 +7944,12 @@ LogicalProject(NAME=[$3], SUM_SAL=[$1], C=[$2])
     </TestCase>
     <TestCase name="testAggregateMerge1">
         <Resource name="sql">
-            <![CDATA[select deptno c, min(y), max(x), max(z) z from (
- select deptno, ename, max(sal) x, max(sal) z, min(sal) y from
- sales.emp group by deptno, ename) t group by deptno]]>
+            <![CDATA[select deptno c, min(y), max(z) z,
+sum(r), sum(m) n, sum(x) sal from (
+   select deptno, ename, sum(sal) x, max(sal) z,
+      min(sal) y, count(hiredate) m, count(mgr) r
+   from sales.emp group by deptno, ename) t
+group by deptno]]>
         </Resource>
         <Resource name="planBefore">
             <![CDATA[
@@ -7950,10 +7967,12 @@ LogicalAggregate(group=[{7}], EXPR$1=[MIN($5)], Z=[MAX($5)], EXPR$3=[COUNT($3)],
     </TestCase>
     <TestCase name="testAggregateMerge2">
         <Resource name="sql">
-            <![CDATA[select deptno, empno, sum(x), sum(y) from (
-        select ename, empno, deptno, sum(sal) x, count(mgr) y from
-        sales.emp group by deptno, ename, empno) t
-        group by grouping sets(deptno, empno)]]>
+            <![CDATA[select deptno, empno, sum(x), sum(y)
+from (
+  select ename, empno, deptno, sum(sal) x, count(mgr) y
+    from sales.emp
+  group by deptno, ename, empno) t
+group by grouping sets(deptno, empno)]]>
         </Resource>
         <Resource name="planBefore">
             <![CDATA[
@@ -7974,9 +7993,9 @@ LogicalProject(DEPTNO=[$1], EMPNO=[$0], EXPR$2=[$2], EXPR$3=[$3])
     <TestCase name="testAggregateMerge3">
         <Resource name="sql">
             <![CDATA[select deptno, sum(x) from (
-        select ename, deptno, sum(sal) x from
-        sales.emp group by cube(deptno, ename)) t
-        group by deptno]]>
+ select ename, deptno, sum(sal) x from
+   sales.emp group by cube(deptno, ename)) t
+group by deptno]]>
         </Resource>
         <Resource name="planBefore">
             <![CDATA[
@@ -7996,9 +8015,9 @@ LogicalAggregate(group=[{1}], EXPR$1=[SUM($2)])
     <TestCase name="testAggregateMerge4">
         <Resource name="sql">
             <![CDATA[select deptno, sum(x) from (
-        select ename, deptno, count(distinct sal) x from
-        sales.emp group by deptno, ename) t
-        group by deptno]]>
+  select ename, deptno, count(distinct sal) x
+    from sales.emp group by deptno, ename) t
+group by deptno]]>
         </Resource>
         <Resource name="planBefore">
             <![CDATA[
@@ -8018,9 +8037,9 @@ LogicalAggregate(group=[{1}], EXPR$1=[SUM($2)])
     <TestCase name="testAggregateMerge5">
         <Resource name="sql">
             <![CDATA[select deptno, avg(x) from (
-        select mgr, deptno, avg(sal) x from
-        sales.emp group by deptno, mgr) t
-        group by deptno]]>
+  select mgr, deptno, avg(sal) x from
+    sales.emp group by deptno, mgr) t
+group by deptno]]>
         </Resource>
         <Resource name="planBefore">
             <![CDATA[
@@ -8040,8 +8059,8 @@ LogicalAggregate(group=[{1}], EXPR$1=[AVG($2)])
     <TestCase name="testAggregateMerge6">
         <Resource name="sql">
             <![CDATA[select sum(x) from (
-        select mgr, deptno, count(sal) x from
-        sales.emp group by deptno, mgr) t]]>
+select mgr, deptno, count(sal) x from
+sales.emp group by deptno, mgr) t]]>
         </Resource>
         <Resource name="planBefore">
             <![CDATA[
@@ -8061,9 +8080,9 @@ LogicalAggregate(group=[{}], EXPR$0=[SUM($2)])
     <TestCase name="testAggregateMerge7">
         <Resource name="sql">
             <![CDATA[select mgr, deptno, sum(x) from (
-        select mgr, deptno, count(sal) x from
-        sales.emp group by deptno, mgr) t
-        group by cube(mgr, deptno)]]>
+  select mgr, deptno, count(sal) x from
+    sales.emp group by deptno, mgr) t
+group by cube(mgr, deptno)]]>
         </Resource>
         <Resource name="planBefore">
             <![CDATA[
@@ -8083,7 +8102,7 @@ LogicalAggregate(group=[{0, 1}], groups=[[{0, 1}, {0}, {1}, {}]], EXPR$2=[SUM($2
     <TestCase name="testAggregateMerge8">
         <Resource name="sql">
             <![CDATA[select sum(x) x, min(y) z from (
-        select sum(sal) x, min(sal) y from sales.emp)]]>
+  select sum(sal) x, min(sal) y from sales.emp)]]>
         </Resource>
         <Resource name="planBefore">
             <![CDATA[
@@ -8101,9 +8120,8 @@ LogicalAggregate(group=[{}], X=[SUM($5)], Z=[MIN($5)])
     </TestCase>
     <TestCase name="testAggregateRemove1">
         <Resource name="sql">
-            <![CDATA[select empno, sum(sal), min(sal), max(sal),
-  bit_and(distinct sal), bit_or(sal), count(distinct sal)
-  from sales.emp group by empno, ename]]>
+            <![CDATA[select empno, sum(sal), min(sal), max(sal), bit_and(distinct sal), bit_or(sal), count(distinct sal) from sales.emp group by empno, deptno
+]]>
         </Resource>
         <Resource name="planBefore">
             <![CDATA[
@@ -8122,7 +8140,8 @@ LogicalProject(EMPNO=[$0], EXPR$1=[$5], EXPR$2=[$5], EXPR$3=[$5], EXPR$4=[$5], E
     </TestCase>
     <TestCase name="testAggregateRemove2">
         <Resource name="sql">
-            <![CDATA[select distinct empno, deptno from sales.emp]]>
+            <![CDATA[select distinct empno, deptno from sales.emp
+]]>
         </Resource>
         <Resource name="planBefore">
             <![CDATA[
@@ -8140,8 +8159,8 @@ LogicalProject(EMPNO=[$0], DEPTNO=[$7])
     </TestCase>
     <TestCase name="testAggregateRemove3">
         <Resource name="sql">
-            <![CDATA[select empno, count(mgr)
-            from sales.emp group by empno, deptno]]>
+            <![CDATA[select empno, count(mgr) from sales.emp group by empno, deptno
+]]>
         </Resource>
         <Resource name="planBefore">
             <![CDATA[
@@ -8160,8 +8179,8 @@ LogicalProject(EMPNO=[$0], EXPR$1=[CASE(IS NOT NULL($3), 1:BIGINT, 0:BIGINT)])
     </TestCase>
     <TestCase name="testAggregateRemove4">
         <Resource name="sql">
-            <![CDATA[select empno, max(sal), avg(sal)
-            from sales.emp group by empno, deptno]]>
+            <![CDATA[select empno, max(sal), avg(sal) from sales.emp group by empno, deptno
+]]>
         </Resource>
         <Resource name="planBefore">
             <![CDATA[
@@ -8182,8 +8201,8 @@ LogicalProject(EMPNO=[$0], EXPR$1=[$2], EXPR$2=[$3])
     </TestCase>
     <TestCase name="testAggregateRemove5">
         <Resource name="sql">
-            <![CDATA[select empno, deptno, sum(sal)
-            from sales.emp group by cube(empno, deptno)]]>
+            <![CDATA[select empno, deptno, sum(sal) from sales.emp group by cube(empno, deptno)
+]]>
         </Resource>
         <Resource name="planBefore">
             <![CDATA[
@@ -8202,8 +8221,8 @@ LogicalAggregate(group=[{0, 1}], groups=[[{0, 1}, {0}, {1}, {}]], EXPR$2=[SUM($2
     </TestCase>
     <TestCase name="testAggregateRemove6">
         <Resource name="sql">
-            <![CDATA[select deptno, max(sal)
-            from sales.emp group by deptno]]>
+            <![CDATA[select deptno, max(sal) from sales.emp group by deptno
+]]>
         </Resource>
         <Resource name="planBefore">
             <![CDATA[
@@ -8223,8 +8242,7 @@ LogicalAggregate(group=[{0}], EXPR$1=[MAX($1)])
     <TestCase name="testAggregateJoinRemove1">
         <Resource name="sql">
             <![CDATA[select distinct e.deptno from sales.emp e
-left outer join sales.dept d on e.deptno = d.deptno
-]]>
+left outer join sales.dept d on e.deptno = d.deptno]]>
         </Resource>
         <Resource name="planBefore">
             <![CDATA[
@@ -8246,8 +8264,7 @@ LogicalAggregate(group=[{7}])
         <Resource name="sql">
             <![CDATA[select e.deptno, count(distinct e.job) from sales.emp e
 left outer join sales.dept d on e.deptno = d.deptno
-group by e.deptno
-]]>
+group by e.deptno]]>
         </Resource>
         <Resource name="planBefore">
             <![CDATA[
@@ -8269,8 +8286,7 @@ LogicalAggregate(group=[{7}], EXPR$1=[COUNT(DISTINCT $2)])
         <Resource name="sql">
             <![CDATA[select e.deptno, count(distinct d.name) from sales.emp e
 left outer join sales.dept d on e.deptno = d.deptno
-group by e.deptno
-]]>
+group by e.deptno]]>
         </Resource>
         <Resource name="planBefore">
             <![CDATA[
@@ -8293,8 +8309,7 @@ LogicalAggregate(group=[{7}], EXPR$1=[COUNT(DISTINCT $10)])
     <TestCase name="testAggregateJoinRemove4">
         <Resource name="sql">
             <![CDATA[select distinct d.deptno from sales.emp e
-right outer join sales.dept d on e.deptno = d.deptno
-]]>
+right outer join sales.dept d on e.deptno = d.deptno]]>
         </Resource>
         <Resource name="planBefore">
             <![CDATA[
@@ -8316,8 +8331,7 @@ LogicalProject(DEPTNO=[$0])
         <Resource name="sql">
             <![CDATA[select d.deptno, count(distinct d.name) from sales.emp e
 right outer join sales.dept d on e.deptno = d.deptno
-group by d.deptno
-]]>
+group by d.deptno]]>
         </Resource>
         <Resource name="planBefore">
             <![CDATA[
@@ -8339,8 +8353,7 @@ LogicalAggregate(group=[{0}], EXPR$1=[COUNT(DISTINCT $1)])
         <Resource name="sql">
             <![CDATA[select d.deptno, count(distinct e.job) from sales.emp e
 right outer join sales.dept d on e.deptno = d.deptno
-group by d.deptno
-]]>
+group by d.deptno]]>
         </Resource>
         <Resource name="planBefore">
             <![CDATA[
@@ -8365,8 +8378,7 @@ LogicalAggregate(group=[{9}], EXPR$1=[COUNT(DISTINCT $2)])
             <![CDATA[SELECT distinct e.deptno
 FROM sales.emp e
 LEFT JOIN sales.dept d1 ON e.deptno = d1.deptno
-LEFT JOIN sales.dept d2 ON e.deptno = d2.deptno
-]]>
+LEFT JOIN sales.dept d2 ON e.deptno = d2.deptno]]>
         </Resource>
         <Resource name="planBefore">
             <![CDATA[
@@ -8394,8 +8406,7 @@ LogicalAggregate(group=[{7}])
 FROM sales.emp e
 LEFT JOIN sales.dept d1 ON e.deptno = d1.deptno
 LEFT JOIN sales.dept d2 ON e.deptno = d2.deptno
-GROUP BY e.deptno
-]]>
+GROUP BY e.deptno]]>
         </Resource>
         <Resource name="planBefore">
             <![CDATA[
@@ -8419,12 +8430,10 @@ LogicalAggregate(group=[{7}], EXPR$1=[COUNT(DISTINCT $10)])
     </TestCase>
     <TestCase name="testAggregateJoinRemove9">
         <Resource name="sql">
-            <![CDATA[SELECT e.deptno, d2.name
+            <![CDATA[SELECT distinct e.deptno, d2.name
 FROM sales.emp e
 LEFT JOIN sales.dept d1 ON e.deptno = d1.deptno
-LEFT JOIN sales.dept d2 ON e.deptno = d2.deptno
-GROUP BY e.deptno
-]]>
+LEFT JOIN sales.dept d2 ON e.deptno = d2.deptno]]>
         </Resource>
         <Resource name="planBefore">
             <![CDATA[
@@ -8452,8 +8461,7 @@ LogicalAggregate(group=[{7, 10}])
 FROM sales.emp e
 LEFT JOIN sales.dept d1 ON e.deptno = d1.deptno
 LEFT JOIN sales.dept d2 ON e.deptno = d2.deptno
-GROUP BY e.deptno
-]]>
+GROUP BY e.deptno]]>
         </Resource>
         <Resource name="planBefore">
             <![CDATA[
@@ -8482,8 +8490,7 @@ LogicalAggregate(group=[{7}], EXPR$1=[COUNT(DISTINCT $10, $12)])
             <![CDATA[SELECT e.deptno, d2.deptno
 FROM sales.emp e
 LEFT JOIN sales.dept d1 ON e.deptno = d1.deptno
-LEFT JOIN sales.dept d2 ON e.deptno = d2.deptno
-]]>
+LEFT JOIN sales.dept d2 ON e.deptno = d2.deptno]]>
         </Resource>
         <Resource name="planBefore">
             <![CDATA[
@@ -8509,8 +8516,7 @@ LogicalProject(DEPTNO=[$7], DEPTNO0=[$9])
             <![CDATA[SELECT e.deptno, d1.deptno
 FROM sales.emp e
 LEFT JOIN sales.dept d1 ON e.deptno = d1.deptno
-LEFT JOIN sales.dept d2 ON e.deptno = d2.deptno
-]]>
+LEFT JOIN sales.dept d2 ON e.deptno = d2.deptno]]>
         </Resource>
         <Resource name="planBefore">
             <![CDATA[
@@ -8538,8 +8544,7 @@ LogicalProject(DEPTNO=[$7], DEPTNO0=[$9])
             <![CDATA[SELECT e1.deptno, d.deptno
 FROM sales.emp e1
 LEFT JOIN sales.emp e2 ON e1.deptno = e2.deptno
-LEFT JOIN sales.dept d ON e1.deptno = d.deptno
-]]>
+LEFT JOIN sales.dept d ON e1.deptno = d.deptno]]>
         </Resource>
         <Resource name="planBefore">
             <![CDATA[
@@ -8566,8 +8571,7 @@ LogicalProject(DEPTNO=[$7], DEPTNO0=[$18])
         <Resource name="sql">
             <![CDATA[SELECT e.deptno
 FROM sales.emp e
-LEFT JOIN sales.dept d ON e.deptno = d.deptno
-]]>
+LEFT JOIN sales.dept d ON e.deptno = d.deptno]]>
         </Resource>
         <Resource name="planBefore">
             <![CDATA[
@@ -8588,8 +8592,7 @@ LogicalProject(DEPTNO=[$7])
         <Resource name="sql">
             <![CDATA[SELECT e1.deptno
 FROM sales.emp e1
-LEFT JOIN sales.emp e2 ON e1.deptno = e2.deptno
-]]>
+LEFT JOIN sales.emp e2 ON e1.deptno = e2.deptno]]>
         </Resource>
         <Resource name="planBefore">
             <![CDATA[
@@ -8612,8 +8615,7 @@ LogicalProject(DEPTNO=[$7])
         <Resource name="sql">
             <![CDATA[SELECT e.deptno, d.name
 FROM sales.emp e
-LEFT JOIN sales.dept d ON e.deptno = d.deptno
-]]>
+LEFT JOIN sales.dept d ON e.deptno = d.deptno]]>
         </Resource>
         <Resource name="planBefore">
             <![CDATA[
@@ -8635,9 +8637,8 @@ LogicalProject(DEPTNO=[$7], NAME=[$10])
     <TestCase name="testProjectJoinRemove7">
         <Resource name="sql">
             <![CDATA[SELECT e.deptno
-FROM sales.dept
-LEFT JOIN sales.emp e ON e.deptno = d.deptno
-]]>
+FROM sales.dept d
+RIGHT JOIN sales.emp e ON e.deptno = d.deptno]]>
         </Resource>
         <Resource name="planBefore">
             <![CDATA[
@@ -8658,8 +8659,7 @@ LogicalProject(DEPTNO=[$7])
         <Resource name="sql">
             <![CDATA[SELECT e2.deptno
 FROM sales.emp e1
-LEFT JOIN sales.emp e2 ON e1.deptno = e2.deptno
-]]>
+RIGHT JOIN sales.emp e2 ON e1.deptno = e2.deptno]]>
         </Resource>
         <Resource name="planBefore">
             <![CDATA[
@@ -8682,8 +8682,7 @@ LogicalProject(DEPTNO=[$16])
         <Resource name="sql">
             <![CDATA[SELECT e.deptno, d.name
 FROM sales.dept d
-RIGHT JOIN sales.emp e ON e.deptno = d.deptno
-]]>
+RIGHT JOIN sales.emp e ON e.deptno = d.deptno]]>
         </Resource>
         <Resource name="planBefore">
             <![CDATA[
@@ -10568,8 +10567,7 @@ LogicalProject(NAME=[$0], ENAME=[$2])
     <TestCase name="testProjectSetOpTranspose">
         <Resource name="sql">
             <![CDATA[select job, sum(sal + 100) over (partition by deptno) from
-(select * from emp e1 union all select * from emp e2)
-]]>
+(select * from emp e1 union all select * from emp e2)]]>
         </Resource>
         <Resource name="planBefore">
             <![CDATA[
@@ -10652,8 +10650,7 @@ LogicalProject(NAME=[$0], ENAME=[$2])
         <Resource name="sql">
             <![CDATA[select sum(t1.deptno + 1) over (partition by t1.name),
 count(t2.empno) over ()
-from DEPT_NESTED as t1, unnest(t1.employees) as t2
-]]>
+from DEPT_NESTED as t1, unnest(t1.employees) as t2]]>
         </Resource>
         <Resource name="planBefore">
             <![CDATA[
@@ -10761,10 +10758,9 @@ LogicalProject(EMPNO=[$0], ENAME=[$1], JOB=[$2], MGR=[$3], HIREDATE=[$4], SAL=[$
 from (
   select empno,
     sum(100) over (partition by deptno, sal order by sal) as col1,
-    sum(100) over (partition by deptno order by deptno) as col2,
+    sum(100) over (partition by sal order by deptno) as col2,
     sum(sal) over (partition by deptno order by sal) as col3
-  from emp where sal = 5000)
-]]>
+  from emp where sal = 5000)]]>
         </Resource>
         <Resource name="planAfter">
             <![CDATA[
@@ -10863,7 +10859,7 @@ LogicalAggregate(group=[{0}], EXPR$1=[SUM($1)])
     </TestCase>
     <TestCase name="testReduceAverageAndVarWithNoReduceStddev">
         <Resource name="sql">
-            <![CDATA[select name, stddev_pop(deptno), avg(deptno), stddev_samp(deptno),var_pop(deptno), var_samp(deptno)
+            <![CDATA[select name, stddev_pop(deptno), avg(deptno), var_pop(deptno)
 from sales.dept group by name]]>
         </Resource>
         <Resource name="planBefore">
@@ -10885,7 +10881,7 @@ LogicalProject(NAME=[$0], EXPR$1=[$1], EXPR$2=[CAST(/($2, $3)):INTEGER NOT NULL]
     </TestCase>
     <TestCase name="testReduceAverageAndSumWithNoReduceStddevAndVar">
         <Resource name="sql">
-            <![CDATA[select name, stddev_pop(deptno), avg(deptno), stddev_samp(deptno),var_pop(deptno), var_samp(deptno)
+            <![CDATA[select name, stddev_pop(deptno), avg(deptno), var_pop(deptno)
 from sales.dept group by name]]>
         </Resource>
         <Resource name="planBefore">
@@ -10906,7 +10902,7 @@ LogicalProject(NAME=[$0], EXPR$1=[$1], EXPR$2=[CAST(/($2, $3)):INTEGER NOT NULL]
     </TestCase>
     <TestCase name="testReduceAllAggregateFunctions">
         <Resource name="sql">
-            <![CDATA[select name, stddev_pop(deptno), avg(deptno), stddev_samp(deptno),var_pop(deptno), var_samp(deptno)
+            <![CDATA[select name, stddev_pop(deptno), avg(deptno), stddev_samp(deptno), var_pop(deptno), var_samp(deptno)
 from sales.dept group by name]]>
         </Resource>
         <Resource name="planBefore">
@@ -10997,11 +10993,9 @@ MultiJoin(joinFilter=[true], isFullOuterJoin=[false], joinTypes=[[INNER, LEFT]],
 ]]>
         </Resource>
     </TestCase>
-
     <TestCase name="testProjectJoinTransposeItem">
         <Resource name="sql">
-            <![CDATA[select t1.c_nationkey[0], t2.c_nationkey[0] from sales.customer as t1 left outer join sales.customer as t2 on t1.c_nationkey[0] = t2.c_nationkey[0]]]]>
-
+            <![CDATA[select t1.c_nationkey[0], t2.c_nationkey[0] from sales.customer as t1 left outer join sales.customer as t2 on t1.c_nationkey[0] = t2.c_nationkey[0]]]>
         </Resource>
         <Resource name="planBefore">
             <![CDATA[
@@ -11012,7 +11006,6 @@ LogicalProject(EXPR$0=[ITEM($0, 0)], EXPR$1=[ITEM($2, 0)])
     LogicalProject(C_NATIONKEY=[$0], $f1=[ITEM($0, 0)])
       LogicalTableScan(table=[[CATALOG, SALES, CUSTOMER]])
 ]]>
-
         </Resource>
         <Resource name="planAfter">
             <![CDATA[
@@ -11027,5 +11020,28 @@ LogicalProject(EXPR$0=[$1], EXPR$1=[$3])
 ]]>
         </Resource>
     </TestCase>
-
+    <TestCase name="testSimplifyItemIsNotNull">
+        <Resource name="sql">
+            <![CDATA[select * from sales.customer as t1 where t1.c_nationkey[0] is not null]]>
+        </Resource>
+        <Resource name="planBefore">
+            <![CDATA[
+LogicalProject(**=[$1])
+  LogicalFilter(condition=[IS NOT NULL(ITEM($0, 0))])
+    LogicalTableScan(table=[[CATALOG, SALES, CUSTOMER]])
+]]>
+        </Resource>
+    </TestCase>
+    <TestCase name="testSimplifyItemIsNull">
+        <Resource name="sql">
+            <![CDATA[select * from sales.customer as t1 where t1.c_nationkey[0] is null]]>
+        </Resource>
+        <Resource name="planBefore">
+            <![CDATA[
+LogicalProject(**=[$1])
+  LogicalFilter(condition=[IS NULL(ITEM($0, 0))])
+    LogicalTableScan(table=[[CATALOG, SALES, CUSTOMER]])
+]]>
+        </Resource>
+    </TestCase>
 </Root>
