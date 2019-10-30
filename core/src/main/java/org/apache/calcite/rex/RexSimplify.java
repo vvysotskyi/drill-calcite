@@ -532,6 +532,7 @@ public class RexSimplify {
     switch (kind) {
     case IS_NULL:
       // x IS NULL ==> FALSE (if x is not nullable)
+      validateStrongPolicy(a);
       simplified = simplifyIsNull(a);
       if (simplified != null) {
         return simplified;
@@ -539,6 +540,7 @@ public class RexSimplify {
       break;
     case IS_NOT_NULL:
       // x IS NOT NULL ==> TRUE (if x is not nullable)
+      validateStrongPolicy(a);
       simplified = simplifyIsNotNull(a);
       if (simplified != null) {
         return simplified;
@@ -588,6 +590,9 @@ public class RexSimplify {
     if (predicates.pulledUpPredicates.contains(a)) {
       return rexBuilder.makeLiteral(true);
     }
+    if (hasCustomNullabilityRules(a.getKind())) {
+      return null;
+    }
     switch (Strong.policy(a.getKind())) {
     case NOT_NULL:
       return rexBuilder.makeLiteral(true);
@@ -628,6 +633,9 @@ public class RexSimplify {
     if (RexUtil.isNull(a)) {
       return rexBuilder.makeLiteral(true);
     }
+    if (hasCustomNullabilityRules(a.getKind())) {
+      return null;
+    }
     switch (Strong.policy(a.getKind())) {
     case NOT_NULL:
       return rexBuilder.makeLiteral(false);
@@ -648,6 +656,54 @@ public class RexSimplify {
     case AS_IS:
     default:
       return null;
+    }
+  }
+
+  /**
+   * Validates strong policy for specified {@link RexNode}.
+   *
+   * @param rexNode Rex node to validate the strong policy
+   * @throws AssertionError If the validation fails
+   */
+  private void validateStrongPolicy(RexNode rexNode) {
+    if (hasCustomNullabilityRules(rexNode.getKind())) {
+      return;
+    }
+    switch (Strong.policy(rexNode.getKind())) {
+    case NOT_NULL:
+      assert !rexNode.getType().isNullable();
+      break;
+    case ANY:
+      List<RexNode> operands = ((RexCall) rexNode).getOperands();
+      if (rexNode.getType().isNullable()) {
+        assert operands.stream()
+            .map(RexNode::getType)
+            .anyMatch(RelDataType::isNullable);
+      } else {
+        assert operands.stream()
+            .map(RexNode::getType)
+            .noneMatch(RelDataType::isNullable);
+      }
+    }
+  }
+
+  /**
+   * Returns {@code true} if specified {@link SqlKind} has custom nullability rules which
+   * depend not only on the nullability of input operands.
+   *
+   * <p>For example, CAST may be used to change the nullability of its operand type,
+   * so it may be nullable, though the argument type was non-nullable.
+   *
+   * @param sqlKind Sql kind to check
+   * @return {@code true} if specified {@link SqlKind} has custom nullability rules
+   */
+  private boolean hasCustomNullabilityRules(SqlKind sqlKind) {
+    switch (sqlKind) {
+    case CAST:
+    case ITEM:
+      return true;
+    default:
+      return false;
     }
   }
 
@@ -769,7 +825,7 @@ public class RexSimplify {
         }
       }
     }
-    List<RexNode> newOperands = CaseBranch.toCaseOperands(rexBuilder, branches);
+    List<RexNode> newOperands = CaseBranch.toCaseOperands(branches);
     if (newOperands.equals(call.getOperands())) {
       return call;
     }
@@ -827,8 +883,7 @@ public class RexSimplify {
       return ret;
     }
 
-    private static List<RexNode> toCaseOperands(RexBuilder rexBuilder,
-        List<CaseBranch> branches) {
+    private static List<RexNode> toCaseOperands(List<CaseBranch> branches) {
       List<RexNode> ret = new ArrayList<>();
       for (int i = 0; i < branches.size() - 1; i++) {
         CaseBranch branch = branches.get(i);
@@ -970,7 +1025,7 @@ public class RexSimplify {
       branches.add(new CaseBranch(cond, value));
     }
 
-    result = simplifyBooleanCaseGeneric(rexBuilder, branches, branchType);
+    result = simplifyBooleanCaseGeneric(rexBuilder, branches);
     return result;
   }
 
@@ -989,7 +1044,7 @@ public class RexSimplify {
    * <pre>(p1 and x) or (p2 and y and not(p1)) or (true and z and not(p1) and not(p2))</pre>
    */
   private static RexNode simplifyBooleanCaseGeneric(RexBuilder rexBuilder,
-      List<CaseBranch> branches, RelDataType outputType) {
+      List<CaseBranch> branches) {
 
     boolean booleanBranches = branches.stream()
         .allMatch(branch -> branch.value.isAlwaysTrue() || branch.value.isAlwaysFalse());
