@@ -53,6 +53,7 @@ import org.apache.calcite.rel.metadata.RelMetadataQuery;
 import org.apache.calcite.rel.rules.JoinAssociateRule;
 import org.apache.calcite.rel.rules.MultiJoin;
 import org.apache.calcite.rel.rules.ProjectTableScanRule;
+import org.apache.calcite.rel.rules.ReduceExpressionsRule;
 import org.apache.calcite.rel.stream.StreamRules;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
@@ -1888,10 +1889,7 @@ public abstract class RelOptUtil {
       }
     }
 
-    // Change the below to enable constant-reduction.
-    if (false) {
-      registerReductionRules(planner);
-    }
+    planner.addRule(ReduceExpressionsRule.FILTER_INSTANCE);
 
   }
 
