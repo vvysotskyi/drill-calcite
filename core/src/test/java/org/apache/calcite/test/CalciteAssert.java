@@ -93,7 +93,6 @@ import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.text.DateFormat;
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -103,7 +102,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
-import java.util.TimeZone;
 import java.util.TreeSet;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
@@ -114,6 +112,8 @@ import javax.sql.DataSource;
 
 import static org.apache.calcite.test.Matchers.containsStringLinux;
 import static org.apache.calcite.test.Matchers.isLinux;
+import static org.apache.calcite.util.DateTimeStringUtils.ISO_DATETIME_FORMAT;
+import static org.apache.calcite.util.DateTimeStringUtils.getDateFormatter;
 
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -143,14 +143,9 @@ public class CalciteAssert {
   private static final DateFormat UTC_TIME_FORMAT;
   private static final DateFormat UTC_TIMESTAMP_FORMAT;
   static {
-    final TimeZone utc = DateTimeUtils.UTC_ZONE;
-    UTC_DATE_FORMAT = new SimpleDateFormat("yyyy-MM-dd", Locale.ROOT);
-    UTC_DATE_FORMAT.setTimeZone(utc);
-    UTC_TIME_FORMAT = new SimpleDateFormat("HH:mm:ss", Locale.ROOT);
-    UTC_TIME_FORMAT.setTimeZone(utc);
-    UTC_TIMESTAMP_FORMAT =
-        new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.ROOT);
-    UTC_TIMESTAMP_FORMAT.setTimeZone(utc);
+    UTC_DATE_FORMAT = getDateFormatter(DateTimeUtils.DATE_FORMAT_STRING);
+    UTC_TIME_FORMAT = getDateFormatter(DateTimeUtils.TIME_FORMAT_STRING);
+    UTC_TIMESTAMP_FORMAT = getDateFormatter(ISO_DATETIME_FORMAT);
   }
 
   public static final ConnectionFactory EMPTY_CONNECTION_FACTORY =

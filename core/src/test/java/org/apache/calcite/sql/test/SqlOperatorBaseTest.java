@@ -85,6 +85,8 @@ import java.util.function.UnaryOperator;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
+import static org.apache.calcite.util.DateTimeStringUtils.getDateFormatter;
+
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThat;
@@ -6061,8 +6063,7 @@ public abstract class SqlOperatorBaseTest {
           (Consumer<Holder<Long>>) o -> o.set(timeInMillis));
     }
 
-    SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:", Locale.ROOT);
-    sdf.setTimeZone(tz);
+    SimpleDateFormat sdf = getDateFormatter("yyyy-MM-dd HH:", tz);
     return Pair.of(sdf.format(calendar.getTime()), closeable);
   }
 

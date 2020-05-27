@@ -108,3 +108,5 @@ public abstract class AbstractCassandraAdapterTest {
     assumeTrue("test explicitly disabled", enabled());
   }
 }
+
+// End AbstractCassandraAdapterTest.java

@@ -20,9 +20,6 @@ import com.google.common.collect.ImmutableMap;
 
 import net.jcip.annotations.NotThreadSafe;
 
-import org.cassandraunit.CassandraCQLUnit;
-import org.cassandraunit.dataset.cql.ClassPathCQLDataSet;
-import org.junit.BeforeClass;
 import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.rules.ExternalResource;
