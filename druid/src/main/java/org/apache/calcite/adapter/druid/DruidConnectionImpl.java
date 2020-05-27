@@ -52,16 +52,17 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Set;
-import java.util.TimeZone;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
+
+import static org.apache.calcite.util.DateTimeStringUtils.ISO_DATETIME_FRACTIONAL_SECOND_FORMAT;
+import static org.apache.calcite.util.DateTimeStringUtils.getDateFormatter;
 
 /**
  * Implementation of {@link DruidConnection}.
@@ -75,12 +76,9 @@ class DruidConnectionImpl implements DruidConnection {
   private static final SimpleDateFormat TIMESTAMP_FORMAT;
 
   static {
-    final TimeZone utc = DateTimeUtils.UTC_ZONE;
     UTC_TIMESTAMP_FORMAT =
-        new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT);
-    UTC_TIMESTAMP_FORMAT.setTimeZone(utc);
-    TIMESTAMP_FORMAT = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ROOT);
-    TIMESTAMP_FORMAT.setTimeZone(utc);
+        getDateFormatter(ISO_DATETIME_FRACTIONAL_SECOND_FORMAT);
+    TIMESTAMP_FORMAT = getDateFormatter(DateTimeUtils.TIMESTAMP_FORMAT_STRING);
   }
 
   DruidConnectionImpl(String url, String coordinatorUrl) {

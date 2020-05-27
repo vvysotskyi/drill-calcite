@@ -92,3 +92,5 @@ public class CqlToSqlTypeConversionRules {
     return rules.getOrDefault(name, SqlTypeName.ANY);
   }
 }
+
+// End CqlToSqlTypeConversionRules.java
