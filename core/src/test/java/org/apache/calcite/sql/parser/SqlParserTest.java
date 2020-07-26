@@ -30,6 +30,7 @@ import org.apache.calcite.sql.dialect.CalciteSqlDialect;
 import org.apache.calcite.sql.parser.impl.SqlParserImpl;
 import org.apache.calcite.sql.pretty.SqlPrettyWriter;
 import org.apache.calcite.sql.test.SqlTests;
+import org.apache.calcite.sql.util.SqlShuttle;
 import org.apache.calcite.sql.validate.SqlConformance;
 import org.apache.calcite.sql.validate.SqlConformanceEnum;
 import org.apache.calcite.test.DiffTestCase;
@@ -73,6 +74,7 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.not;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThat;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assume.assumeFalse;
 import static org.junit.Assume.assumeTrue;
 
@@ -5764,6 +5766,47 @@ public class SqlParserTest {
     // just need to check for 0
     expr("INTERVAL '0' DAY(0)")
         .ok("INTERVAL '0' DAY(0)");
+  }
+
+  @Test public void testVisitSqlInsertWithSqlShuttle() throws Exception {
+    final String sql = "insert into emps select * from emps";
+    final SqlNode sqlNode = getSqlParser(sql).parseStmt();
+    final SqlNode sqlNodeVisited = sqlNode.accept(new SqlShuttle() {
+      @Override public SqlNode visit(SqlIdentifier identifier) {
+        return new SqlIdentifier(identifier.names,
+            identifier.getParserPosition());
+      }
+    });
+    assertTrue(sqlNodeVisited != sqlNode);
+    assertTrue(sqlNodeVisited.getKind() == SqlKind.INSERT);
+  }
+
+  @Test public void testSqlInsertSqlBasicCallToString() throws Exception {
+    final String sql0 = "insert into emps select * from emps";
+    final SqlNode sqlNode0 = getSqlParser(sql0).parseStmt();
+    final SqlNode sqlNodeVisited0 = sqlNode0.accept(new SqlShuttle() {
+      @Override public SqlNode visit(SqlIdentifier identifier) {
+        return new SqlIdentifier(identifier.names,
+            identifier.getParserPosition());
+      }
+    });
+    final String str0 = "INSERT INTO `EMPS`\n"
+        + "(SELECT *\n"
+        + "FROM `EMPS`)";
+    assertEquals(linux(sqlNodeVisited0.toString()), str0);
+
+    final String sql1 = "insert into emps select empno from emps";
+    final SqlNode sqlNode1 = getSqlParser(sql1).parseStmt();
+    final SqlNode sqlNodeVisited1 = sqlNode1.accept(new SqlShuttle() {
+      @Override public SqlNode visit(SqlIdentifier identifier) {
+        return new SqlIdentifier(identifier.names,
+            identifier.getParserPosition());
+      }
+    });
+    final String str1 = "INSERT INTO `EMPS`\n"
+        + "(SELECT `EMPNO`\n"
+        + "FROM `EMPS`)";
+    assertEquals(linux(sqlNodeVisited1.toString()), str1);
   }
 
   /**
