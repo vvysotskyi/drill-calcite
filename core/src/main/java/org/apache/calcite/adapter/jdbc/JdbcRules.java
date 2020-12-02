@@ -214,24 +214,28 @@ public class JdbcRules {
               SNAPSHOT_FACTORY));
 
   public static List<RelOptRule> rules(JdbcConvention out) {
-    return rules(out, RelFactories.LOGICAL_BUILDER);
+    return rules(Convention.NONE, out, RelFactories.LOGICAL_BUILDER);
   }
 
-  public static List<RelOptRule> rules(JdbcConvention out,
+  public static List<RelOptRule> rules(RelTrait in, JdbcConvention out) {
+    return rules(in, out, RelFactories.LOGICAL_BUILDER);
+  }
+
+  public static List<RelOptRule> rules(RelTrait in, JdbcConvention out,
       RelBuilderFactory relBuilderFactory) {
     return ImmutableList.of(
         new JdbcToEnumerableConverterRule(out, relBuilderFactory),
-        new JdbcJoinRule(out, relBuilderFactory),
-        new JdbcCalcRule(out, relBuilderFactory),
-        new JdbcProjectRule(out, relBuilderFactory),
-        new JdbcFilterRule(out, relBuilderFactory),
-        new JdbcAggregateRule(out, relBuilderFactory),
-        new JdbcSortRule(out, relBuilderFactory),
-        new JdbcUnionRule(out, relBuilderFactory),
-        new JdbcIntersectRule(out, relBuilderFactory),
-        new JdbcMinusRule(out, relBuilderFactory),
-        new JdbcTableModificationRule(out, relBuilderFactory),
-        new JdbcValuesRule(out, relBuilderFactory));
+        new JdbcJoinRule(in, out, relBuilderFactory),
+        new JdbcCalcRule(in, out, relBuilderFactory),
+        new JdbcProjectRule(in, out, relBuilderFactory),
+        new JdbcFilterRule(in, out, relBuilderFactory),
+        new JdbcAggregateRule(in, out, relBuilderFactory),
+        new JdbcSortRule(in, out, relBuilderFactory),
+        new JdbcUnionRule(in, out, relBuilderFactory),
+        new JdbcIntersectRule(in, out, relBuilderFactory),
+        new JdbcMinusRule(in, out, relBuilderFactory),
+        new JdbcTableModificationRule(in, out, relBuilderFactory),
+        new JdbcValuesRule(in, out, relBuilderFactory));
   }
 
   /** Abstract base class for rule that converts to JDBC. */
@@ -268,13 +272,13 @@ public class JdbcRules {
   public static class JdbcJoinRule extends JdbcConverterRule {
     @Deprecated // to be removed before 2.0
     public JdbcJoinRule(JdbcConvention out) {
-      this(out, RelFactories.LOGICAL_BUILDER);
+      this(Convention.NONE, out, RelFactories.LOGICAL_BUILDER);
     }
 
     /** Creates a JdbcJoinRule. */
-    public JdbcJoinRule(JdbcConvention out,
+    public JdbcJoinRule(RelTrait in, JdbcConvention out,
         RelBuilderFactory relBuilderFactory) {
-      super(Join.class, (Predicate<RelNode>) r -> true, Convention.NONE,
+      super(Join.class, (Predicate<RelNode>) r -> true, in,
           out, relBuilderFactory, "JdbcJoinRule");
     }
 
@@ -431,9 +435,9 @@ public class JdbcRules {
    */
   private static class JdbcCalcRule extends JdbcConverterRule {
     /** Creates a JdbcCalcRule. */
-    private JdbcCalcRule(JdbcConvention out,
+    private JdbcCalcRule(RelTrait in, JdbcConvention out,
         RelBuilderFactory relBuilderFactory) {
-      super(Calc.class, (Predicate<RelNode>) r -> true, Convention.NONE,
+      super(Calc.class, (Predicate<RelNode>) r -> true, in,
           out, relBuilderFactory, "JdbcCalcRule");
     }
 
@@ -508,17 +512,17 @@ public class JdbcRules {
   public static class JdbcProjectRule extends JdbcConverterRule {
     @Deprecated // to be removed before 2.0
     public JdbcProjectRule(final JdbcConvention out) {
-      this(out, RelFactories.LOGICAL_BUILDER);
+      this(Convention.NONE, out, RelFactories.LOGICAL_BUILDER);
     }
 
     /** Creates a JdbcProjectRule. */
-    public JdbcProjectRule(final JdbcConvention out,
+    public JdbcProjectRule(RelTrait in, JdbcConvention out,
         RelBuilderFactory relBuilderFactory) {
       super(Project.class, (Predicate<Project>) project ->
               (out.dialect.supportsWindowFunctions()
                   || !RexOver.containsOver(project.getProjects(), null))
                   && !userDefinedFunctionInProject(project),
-          Convention.NONE, out, relBuilderFactory, "JdbcProjectRule");
+          in, out, relBuilderFactory, "JdbcProjectRule");
     }
 
     private static boolean userDefinedFunctionInProject(Project project) {
@@ -591,15 +595,15 @@ public class JdbcRules {
   public static class JdbcFilterRule extends JdbcConverterRule {
     @Deprecated // to be removed before 2.0
     public JdbcFilterRule(JdbcConvention out) {
-      this(out, RelFactories.LOGICAL_BUILDER);
+      this(Convention.NONE, out, RelFactories.LOGICAL_BUILDER);
     }
 
     /** Creates a JdbcFilterRule. */
-    public JdbcFilterRule(JdbcConvention out,
+    public JdbcFilterRule(RelTrait in, JdbcConvention out,
         RelBuilderFactory relBuilderFactory) {
       super(Filter.class,
           (Predicate<Filter>) r -> !userDefinedFunctionInFilter(r),
-          Convention.NONE, out, relBuilderFactory, "JdbcFilterRule");
+          in, out, relBuilderFactory, "JdbcFilterRule");
     }
 
     private static boolean userDefinedFunctionInFilter(Filter filter) {
@@ -649,13 +653,13 @@ public class JdbcRules {
   public static class JdbcAggregateRule extends JdbcConverterRule {
     @Deprecated // to be removed before 2.0
     public JdbcAggregateRule(JdbcConvention out) {
-      this(out, RelFactories.LOGICAL_BUILDER);
+      this(Convention.NONE, out, RelFactories.LOGICAL_BUILDER);
     }
 
     /** Creates a JdbcAggregateRule. */
-    public JdbcAggregateRule(JdbcConvention out,
+    public JdbcAggregateRule(RelTrait in, JdbcConvention out,
         RelBuilderFactory relBuilderFactory) {
-      super(Aggregate.class, (Predicate<RelNode>) r -> true, Convention.NONE,
+      super(Aggregate.class, (Predicate<RelNode>) r -> true, in,
           out, relBuilderFactory, "JdbcAggregateRule");
     }
 
@@ -741,13 +745,13 @@ public class JdbcRules {
   public static class JdbcSortRule extends JdbcConverterRule {
     @Deprecated // to be removed before 2.0
     public JdbcSortRule(JdbcConvention out) {
-      this(out, RelFactories.LOGICAL_BUILDER);
+      this(Convention.NONE, out, RelFactories.LOGICAL_BUILDER);
     }
 
     /** Creates a JdbcSortRule. */
-    public JdbcSortRule(JdbcConvention out,
+    public JdbcSortRule(RelTrait in, JdbcConvention out,
         RelBuilderFactory relBuilderFactory) {
-      super(Sort.class, (Predicate<RelNode>) r -> true, Convention.NONE, out,
+      super(Sort.class, (Predicate<RelNode>) r -> true, in, out,
           relBuilderFactory, "JdbcSortRule");
     }
 
@@ -812,13 +816,13 @@ public class JdbcRules {
   public static class JdbcUnionRule extends JdbcConverterRule {
     @Deprecated // to be removed before 2.0
     public JdbcUnionRule(JdbcConvention out) {
-      this(out, RelFactories.LOGICAL_BUILDER);
+      this(Convention.NONE, out, RelFactories.LOGICAL_BUILDER);
     }
 
     /** Creates a JdbcUnionRule. */
-    public JdbcUnionRule(JdbcConvention out,
+    public JdbcUnionRule(RelTrait in, JdbcConvention out,
         RelBuilderFactory relBuilderFactory) {
-      super(Union.class, (Predicate<RelNode>) r -> true, Convention.NONE, out,
+      super(Union.class, (Predicate<RelNode>) r -> true, in, out,
           relBuilderFactory, "JdbcUnionRule");
     }
 
@@ -862,9 +866,9 @@ public class JdbcRules {
    */
   public static class JdbcIntersectRule extends JdbcConverterRule {
     /** Creates a JdbcIntersectRule. */
-    private JdbcIntersectRule(JdbcConvention out,
+    private JdbcIntersectRule(RelTrait in, JdbcConvention out,
         RelBuilderFactory relBuilderFactory) {
-      super(Intersect.class, (Predicate<RelNode>) r -> true, Convention.NONE,
+      super(Intersect.class, (Predicate<RelNode>) r -> true, in,
           out, relBuilderFactory, "JdbcIntersectRule");
     }
 
@@ -909,9 +913,9 @@ public class JdbcRules {
    */
   public static class JdbcMinusRule extends JdbcConverterRule {
     /** Creates a JdbcMinusRule. */
-    private JdbcMinusRule(JdbcConvention out,
+    private JdbcMinusRule(RelTrait in, JdbcConvention out,
         RelBuilderFactory relBuilderFactory) {
-      super(Minus.class, (Predicate<RelNode>) r -> true, Convention.NONE, out,
+      super(Minus.class, (Predicate<RelNode>) r -> true, in, out,
           relBuilderFactory, "JdbcMinusRule");
     }
 
@@ -948,10 +952,10 @@ public class JdbcRules {
   /** Rule that converts a table-modification to JDBC. */
   public static class JdbcTableModificationRule extends JdbcConverterRule {
     /** Creates a JdbcTableModificationRule. */
-    private JdbcTableModificationRule(JdbcConvention out,
+    private JdbcTableModificationRule(RelTrait in, JdbcConvention out,
         RelBuilderFactory relBuilderFactory) {
       super(TableModify.class, (Predicate<RelNode>) r -> true,
-          Convention.NONE, out, relBuilderFactory, "JdbcTableModificationRule");
+          in, out, relBuilderFactory, "JdbcTableModificationRule");
     }
 
     @Override public RelNode convert(RelNode rel) {
@@ -1024,9 +1028,9 @@ public class JdbcRules {
   /** Rule that converts a values operator to JDBC. */
   public static class JdbcValuesRule extends JdbcConverterRule {
     /** Creates a JdbcValuesRule. */
-    private JdbcValuesRule(JdbcConvention out,
+    private JdbcValuesRule(RelTrait in, JdbcConvention out,
         RelBuilderFactory relBuilderFactory) {
-      super(Values.class, (Predicate<RelNode>) r -> true, Convention.NONE,
+      super(Values.class, (Predicate<RelNode>) r -> true, in,
           out, relBuilderFactory, "JdbcValuesRule");
     }
 
