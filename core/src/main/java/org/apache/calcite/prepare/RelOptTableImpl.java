@@ -20,6 +20,7 @@ import org.apache.calcite.adapter.enumerable.EnumerableTableScan;
 import org.apache.calcite.config.CalciteSystemProperty;
 import org.apache.calcite.jdbc.CalciteSchema;
 import org.apache.calcite.linq4j.tree.Expression;
+import org.apache.calcite.linq4j.tree.TableExpressionFactory;
 import org.apache.calcite.materialize.Lattice;
 import org.apache.calcite.plan.RelOptCluster;
 import org.apache.calcite.plan.RelOptSchema;
@@ -69,7 +70,6 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
-import java.util.function.Function;
 
 /**
  * Implementation of {@link org.apache.calcite.plan.RelOptTable}.
@@ -78,7 +78,7 @@ public class RelOptTableImpl extends Prepare.AbstractPreparingTable {
   private final RelOptSchema schema;
   private final RelDataType rowType;
   private final Table table;
-  private final Function<Class, Expression> expressionFunction;
+  private final TableExpressionFactory tableExpressionFactory;
   private final ImmutableList<String> names;
 
   /** Estimate for the row count, or null.
@@ -95,13 +95,13 @@ public class RelOptTableImpl extends Prepare.AbstractPreparingTable {
       RelDataType rowType,
       List<String> names,
       Table table,
-      Function<Class, Expression> expressionFunction,
+      TableExpressionFactory tableExpressionFactory,
       Double rowCount) {
     this.schema = schema;
     this.rowType = Objects.requireNonNull(rowType);
     this.names = ImmutableList.copyOf(names);
     this.table = table; // may be null
-    this.expressionFunction = expressionFunction; // may be null
+    this.tableExpressionFactory = tableExpressionFactory; // may be null
     this.rowCount = rowCount; // may be null
   }
 
@@ -114,29 +114,53 @@ public class RelOptTableImpl extends Prepare.AbstractPreparingTable {
         c -> expression, null);
   }
 
+  @Deprecated // to be removed before 2.0
   public static RelOptTableImpl create(
       RelOptSchema schema,
       RelDataType rowType,
       List<String> names,
       Table table,
       Expression expression) {
+    return create(schema, rowType, names, table, c -> expression);
+  }
+
+  /**
+   * Creates {@link RelOptTableImpl} instance with specified arguments
+   * and row count obtained from table statistic.
+   *
+   * @param schema table schema
+   * @param rowType table row type
+   * @param names full table path
+   * @param table table
+   * @param expressionFactory expression function for accessing table data
+   *                          in the generated code
+   *
+   * @return {@link RelOptTableImpl} instance
+   */
+  public static RelOptTableImpl create(
+      RelOptSchema schema,
+      RelDataType rowType,
+      List<String> names,
+      Table table,
+      TableExpressionFactory expressionFactory) {
     return new RelOptTableImpl(schema, rowType, names, table,
-        c -> expression, table.getStatistic().getRowCount());
+        expressionFactory, table.getStatistic().getRowCount());
   }
 
   public static RelOptTableImpl create(RelOptSchema schema, RelDataType rowType,
       Table table, Path path) {
     final SchemaPlus schemaPlus = MySchemaPlus.create(path);
     return new RelOptTableImpl(schema, rowType, Pair.left(path), table,
-        getClassExpressionFunction(schemaPlus, Util.last(path).left, table),
+        c -> Schemas.getTableExpression(schemaPlus, Util.last(path).left, table, c),
         table.getStatistic().getRowCount());
   }
 
   public static RelOptTableImpl create(RelOptSchema schema, RelDataType rowType,
       final CalciteSchema.TableEntry tableEntry, Double rowCount) {
     final Table table = tableEntry.getTable();
-    return new RelOptTableImpl(schema, rowType, tableEntry.path(),
-        table, getClassExpressionFunction(tableEntry, table), rowCount);
+    return new RelOptTableImpl(schema, rowType, tableEntry.path(), table,
+        c -> Schemas.getTableExpression(tableEntry.schema.plus(), tableEntry.name, table, c),
+        rowCount);
   }
 
   /**
@@ -144,33 +168,7 @@ public class RelOptTableImpl extends Prepare.AbstractPreparingTable {
    */
   public RelOptTableImpl copy(RelDataType newRowType) {
     return new RelOptTableImpl(this.schema, newRowType, this.names, this.table,
-        this.expressionFunction, this.rowCount);
-  }
-
-  private static Function<Class, Expression> getClassExpressionFunction(
-      CalciteSchema.TableEntry tableEntry, Table table) {
-    return getClassExpressionFunction(tableEntry.schema.plus(), tableEntry.name,
-        table);
-  }
-
-  private static Function<Class, Expression> getClassExpressionFunction(
-      final SchemaPlus schema, final String tableName, final Table table) {
-    if (table instanceof QueryableTable) {
-      final QueryableTable queryableTable = (QueryableTable) table;
-      return clazz -> queryableTable.getExpression(schema, tableName, clazz);
-    } else if (table instanceof ScannableTable
-        || table instanceof FilterableTable
-        || table instanceof ProjectableFilterableTable) {
-      return clazz -> Schemas.tableExpression(schema, Object[].class, tableName,
-          table.getClass());
-    } else if (table instanceof StreamableTable) {
-      return getClassExpressionFunction(schema, tableName,
-          ((StreamableTable) table).stream());
-    } else {
-      return input -> {
-        throw new UnsupportedOperationException();
-      };
-    }
+        this.tableExpressionFactory, this.rowCount);
   }
 
   public static RelOptTableImpl create(RelOptSchema schema,
@@ -203,17 +201,17 @@ public class RelOptTableImpl extends Prepare.AbstractPreparingTable {
   }
 
   public Expression getExpression(Class clazz) {
-    if (expressionFunction == null) {
+    if (tableExpressionFactory == null) {
       return null;
     }
-    return expressionFunction.apply(clazz);
+    return tableExpressionFactory.create(clazz);
   }
 
   @Override protected RelOptTable extend(Table extendedTable) {
     final RelDataType extendedRowType =
         extendedTable.getRowType(getRelOptSchema().getTypeFactory());
     return new RelOptTableImpl(getRelOptSchema(), extendedRowType, getQualifiedName(),
-        extendedTable, expressionFunction, getRowCount());
+        extendedTable, tableExpressionFactory, getRowCount());
   }
 
   @Override public boolean equals(Object obj) {
@@ -265,7 +263,7 @@ public class RelOptTableImpl extends Prepare.AbstractPreparingTable {
       }
       final RelOptTable relOptTable =
           new RelOptTableImpl(this.schema, b.build(), this.names, this.table,
-              this.expressionFunction, this.rowCount) {
+              this.tableExpressionFactory, this.rowCount) {
             @Override public <T> T unwrap(Class<T> clazz) {
               if (clazz.isAssignableFrom(InitializerExpressionFactory.class)) {
                 return clazz.cast(NullInitializerExpressionFactory.INSTANCE);
