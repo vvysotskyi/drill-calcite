@@ -215,6 +215,32 @@ public class Projection2Test {
 
   }
 
+  /** Test case for
+   * <a href="https://issues.apache.org/jira/browse/CALCITE-4450">[CALCITE-4450]
+   * ElasticSearch query with varchar literal projection fails with JsonParseException</a>. */
+  @Test
+  public void projectionStringLiteral() {
+    CalciteAssert.that()
+        .with(newConnectionFactory())
+        .query(
+            String.format(Locale.ROOT, "select 'foo' as \"lit\"\n"
+                + "from \"elastic\".\"%s\"", NAME))
+        .returns("lit=foo\n");
+  }
+
+  /** Test case for
+   * <a href="https://issues.apache.org/jira/browse/CALCITE-4450">[CALCITE-4450]
+   * ElasticSearch query with varchar literal projection fails with JsonParseException</a>. */
+  @Test
+  public void projectionStringLiteralAndColumn() {
+    CalciteAssert.that()
+        .with(newConnectionFactory())
+        .query(
+            String.format(Locale.ROOT, "select 'foo\\\"bar\\\"' as \"lit\", _MAP['a'] as \"a\"\n"
+                + "from \"elastic\".\"%s\"", NAME))
+        .returns("lit=foo\\\"bar\\\"; a=1\n");
+  }
+
   /**
    * Allows values to contain regular expressions instead of exact values.
    * <pre>
