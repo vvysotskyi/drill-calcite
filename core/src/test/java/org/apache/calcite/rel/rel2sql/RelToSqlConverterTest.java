@@ -3555,6 +3555,10 @@ public class RelToSqlConverterTest {
   @Test public void testValues() {
     final String sql = "select \"a\"\n"
         + "from (values (1, 'x'), (2, 'yy')) as t(\"a\", \"b\")";
+    final String expectedClickHouse = "SELECT `a`\n"
+        + "FROM (SELECT 1 AS `a`, 'x ' AS `b`\n"
+        + "UNION ALL\n"
+        + "SELECT 2 AS `a`, 'yy' AS `b`)"; // almost the same as MySQL
     final String expectedHsqldb = "SELECT a\n"
         + "FROM (VALUES  (1, 'x '),\n"
         + " (2, 'yy')) AS t (a, b)";
@@ -3585,7 +3589,9 @@ public class RelToSqlConverterTest {
         .withSnowflake()
         .ok(expectedSnowflake)
         .withRedshift()
-        .ok(expectedRedshift);
+        .ok(expectedRedshift)
+        .withClickHouse()
+        .ok(expectedClickHouse);
   }
 
   @Test public void testValuesEmpty() {
@@ -3603,14 +3609,32 @@ public class RelToSqlConverterTest {
     final String expectedPostgresql = "SELECT *\n"
         + "FROM (VALUES  (NULL, NULL)) AS \"t\" (\"X\", \"Y\")\n"
         + "WHERE 1 = 0";
+    final String expectedClickHouse = expectedMysql;
     sql(sql)
         .optimize(rules, null)
-        .withMysql()
-        .ok(expectedMysql)
-        .withOracle()
-        .ok(expectedOracle)
-        .withPostgresql()
-        .ok(expectedPostgresql);
+        .withClickHouse().ok(expectedClickHouse)
+        .withMysql().ok(expectedMysql)
+        .withOracle().ok(expectedOracle)
+        .withPostgresql().ok(expectedPostgresql);
+  }
+
+  /** Tests SELECT without FROM clause; effectively the same as a VALUES
+   * query.
+   *
+   * <p>Test case for
+   * <a href="https://issues.apache.org/jira/browse/CALCITE-4724">[CALCITE-4724]
+   * In JDBC adapter for ClickHouse, implement Values by generating SELECT
+   * without FROM</a>. */
+  @Test public void testSelectWithoutFrom() {
+    final String query = "select 2 + 2";
+    final String expectedClickHouse = "SELECT 2 + 2";
+    sql(query).withClickHouse().ok(expectedClickHouse);
+  }
+
+  @Test public void testSelectOne() {
+    final String query = "select 1";
+    final String expectedClickHouse = "SELECT 1";
+    sql(query).withClickHouse().ok(expectedClickHouse);
   }
 
   /** Test case for
