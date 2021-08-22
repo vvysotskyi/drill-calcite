@@ -226,3 +226,4 @@ public class ClickHouseSqlDialect extends SqlDialect {
     writer.endList(frame);
   }
 }
+// End ClickHouseSqlDialect.java

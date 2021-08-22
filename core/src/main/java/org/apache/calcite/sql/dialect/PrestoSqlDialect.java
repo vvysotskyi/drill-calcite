@@ -127,3 +127,4 @@ public class PrestoSqlDialect extends SqlDialect {
     MysqlSqlDialect.DEFAULT.unparseSqlIntervalQualifier(writer, qualifier, typeSystem);
   }
 }
+// End PrestoSqlDialect.java
