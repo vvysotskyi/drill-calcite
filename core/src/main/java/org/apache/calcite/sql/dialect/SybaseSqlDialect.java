@@ -44,12 +44,15 @@ public class SybaseSqlDialect extends SqlDialect {
       SqlNode fetch) {
     // Parentheses are not required, but we use them to be consistent with
     // Microsoft SQL Server, which recommends them but does not require them.
-    //
-    // Note that "fetch" is ignored.
     writer.keyword("TOP");
     writer.keyword("(");
     fetch.unparse(writer, -1, -1);
     writer.keyword(")");
+    if (offset != null) {
+      writer.keyword("START");
+      writer.keyword("AT");
+      offset.unparse(writer, -1, -1);
+    }
   }
 }
 
